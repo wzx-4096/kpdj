@@ -1,0 +1,2179 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover, maximum-scale=1.0, minimum-scale=1.0">
+    <title>初13班卡牌对决</title>
+    <style>
+        :root { --bg: #1a1a2e; --card-bg: #16213e; --gold: #f0c060; --red: #e74c3c; --blue: #4da6ff; --green: #5cb85c; --panel: #1e2746; --border: #3a3f5c; }
+        * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; user-select:none; }
+        body { background: #0d0d1a; font-family: 'PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif; display:flex; justify-content:center; align-items:center; min-height:100vh; overflow-y:auto; touch-action:manipulation; position:relative; }
+        .bg-particles { position:fixed; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:0; opacity:0.3; }
+        .bg-particle { position:absolute; background:var(--gold); border-radius:50%; animation:floatUp 6s infinite ease-in; }
+        @keyframes floatUp { 0%{ transform:translateY(100vh) scale(0); opacity:0; } 20%{ opacity:0.7; } 100%{ transform:translateY(-10vh) scale(1); opacity:0; } }
+        .game-container { position:relative; z-index:1; width:100%; max-width:420px; padding:10px; display:flex; flex-direction:column; align-items:center; gap:8px; }
+        .screen { display:none; flex-direction:column; align-items:center; width:100%; gap:10px; animation:fadeIn 0.4s ease; }
+        .screen.active { display:flex; }
+        @keyframes fadeIn { from{ opacity:0; transform:translateY(20px); } to{ opacity:1; transform:translateY(0); } }
+        @keyframes pulse { 0%,100%{ transform:scale(1); } 50%{ transform:scale(1.04); } }
+        @keyframes cardFlip { 0%{ transform:perspective(900px) rotateY(0deg) translateY(0); } 35%{ transform:perspective(900px) rotateY(70deg) translateY(-14px); } 100%{ transform:perspective(900px) rotateY(180deg) translateY(0); } }
+        .game-title { font-size:clamp(22px,6vw,28px); font-weight:900; color:var(--gold); text-align:center; letter-spacing:2px; text-shadow:0 0 30px rgba(240,192,96,0.6); margin-bottom:2px; }
+        .game-subtitle { font-size:14px; color:#f0c060; letter-spacing:3px; text-align:center; margin-bottom:4px; text-shadow:0 0 12px rgba(240,192,96,0.5); font-weight:bold; display:block; }
+        .btn { display:inline-block; padding:12px 28px; border:2px solid var(--gold); background:linear-gradient(180deg, rgba(30,30,50,0.9) 0%, rgba(20,20,40,0.95) 100%); color:var(--gold); font-size:16px; font-weight:700; border-radius:28px; cursor:pointer; letter-spacing:1px; transition:all 0.25s; min-width:120px; outline:none; text-align:center; touch-action:manipulation; }
+        .btn:active { transform:scale(0.94); background:rgba(240,192,96,0.2); box-shadow:0 0 40px rgba(240,192,96,0.5); border-color:#fff; }
+        .btn-sm { padding:8px 18px; font-size:13px; min-width:80px; border-radius:20px; }
+        .btn-danger { border-color:var(--red); color:#ff6b6b; }
+        .btn-success { border-color:var(--green); color:#7ddf90; }
+        .btn-info { border-color:var(--blue); color:#7dbfff; }
+        .btn-warning { border-color:#f0a040; color:#f0a040; }
+        .card-display { background:var(--card-bg); border:3px solid var(--border); border-radius:14px; padding:12px; text-align:center; box-shadow:0 4px 20px rgba(0,0,0,0.5); transition:all 0.3s; cursor:pointer; }
+        .card-display.selected { border-color:var(--gold); box-shadow:0 0 20px rgba(240,192,96,0.7); }
+        .card-avatar { font-size:40px; display:block; margin:0 auto 2px; line-height:1; }
+        .card-name { font-weight:700; font-size:13px; color:#fff; }
+        .card-hp { color:#ff6b6b; font-size:10px; font-weight:600; }
+        .card-skill-info { font-size:9px; color:#aab; line-height:1.2; }
+        .draw-card { width:120px; height:155px; background:linear-gradient(135deg,#2c3e6b,#1a2744); border:3px solid var(--gold); border-radius:14px; display:flex; flex-direction:column; align-items:center; justify-content:center; cursor:pointer; box-shadow:0 4px 20px rgba(0,0,0,0.5); transition:all 0.5s; position:relative; transform-style:preserve-3d; }
+        .draw-card.flipping { animation:cardFlip 0.7s cubic-bezier(0.4,0,0.2,1) forwards; }
+        .draw-card.revealed { transform:perspective(900px) rotateY(180deg); }
+        .draw-card .card-back { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:35px; color:var(--gold); backface-visibility:hidden; -webkit-backface-visibility:hidden; border-radius:11px; }
+        .draw-card .card-back::before { content:''; position:absolute; inset:6px; border:2px dashed rgba(240,192,96,0.35); border-radius:9px; }
+        .draw-card .card-front { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; transform:rotateY(180deg); backface-visibility:hidden; -webkit-backface-visibility:hidden; border-radius:11px; }
+        .battle-arena-wrapper { position:relative; width:100%; display:flex; justify-content:center; }
+        .battle-canvas { border-radius:14px; box-shadow:0 0 30px rgba(240,192,96,0.25); display:block; max-width:100%; border:3px solid #3a3050; }
+        .battle-hud { display:flex; justify-content:center; width:100%; max-width:380px; gap:6px; flex-wrap:wrap; max-height:150px; overflow-y:auto; }
+        .hud-card { background:var(--panel); border-radius:10px; padding:6px 8px; text-align:center; border:2px solid var(--border); box-shadow:0 2px 10px rgba(0,0,0,0.4); min-width:70px; flex:0 0 auto; }
+        .hud-hp-bar { height:6px; background:#333; border-radius:3px; overflow:hidden; margin-top:2px; }
+        .hud-hp-fill { height:100%; background:linear-gradient(90deg,#ff4444,#ff6b6b); border-radius:3px; transition:width 0.4s; }
+        .hud-hp-fill.danger { background:linear-gradient(90deg,#cc0000,#ff2222); animation:pulse 0.6s infinite; }
+        .modal-overlay { position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.75); z-index:100; display:none; justify-content:center; align-items:center; }
+        .modal-overlay.active { display:flex; }
+        .modal-box { background:var(--panel); border:2px solid var(--gold); border-radius:16px; padding:16px; max-width:340px; width:90%; box-shadow:0 0 50px rgba(0,0,0,0.7); max-height:70vh; overflow-y:auto; }
+        .modal-box h3 { color:var(--gold); text-align:center; margin-bottom:8px; font-size:16px; }
+        .modal-box li { color:#ccd; font-size:12px; line-height:1.5; margin:3px 0; }
+        .modal-box ul { list-style:none; padding-left:0; }
+        .modal-box ul li::before { content:'⚔️ '; }
+        .damage-pop { position:absolute; pointer-events:none; font-weight:900; font-size:18px; color:#ff4444; z-index:10; animation:dmgFloat 1s ease-out forwards; text-shadow:0 0 6px rgba(255,0,0,0.7); }
+        @keyframes dmgFloat { 0%{ opacity:1; transform:translateY(0) scale(1); } 60%{ opacity:0.9; transform:translateY(-35px) scale(1.3); } 100%{ opacity:0; transform:translateY(-60px) scale(0.5); } }
+        .heal-pop { position:absolute; pointer-events:none; font-weight:900; font-size:18px; color:#5cb85c; z-index:10; animation:dmgFloat 1s ease-out forwards; text-shadow:0 0 6px rgba(92,184,92,0.7); }
+        .dodge-pop { position:absolute; pointer-events:none; font-weight:900; font-size:14px; color:#66ccff; z-index:10; animation:dmgFloat 1s ease-out forwards; text-shadow:0 0 6px rgba(102,204,255,0.7); }
+        .frozen-fixed { position:fixed; pointer-events:none; font-weight:900; font-size:14px; color:#00ffff; z-index:10; text-shadow:0 0 6px rgba(0,255,255,0.7); transform:translate(-50%,-50%); opacity:0; transition: opacity 0.3s ease; }
+        .frozen-visible { opacity:1; }
+        .revive-pop { position:absolute; pointer-events:none; font-weight:900; font-size:20px; color:#90ee90; z-index:10; animation:dmgFloat 1s ease-out forwards; text-shadow:0 0 8px rgba(144,238,144,0.7); }
+        .phone-pop { position:absolute; pointer-events:none; font-weight:900; font-size:22px; color:#fff; z-index:10; animation:dmgFloat 1.2s ease-out forwards; text-shadow:0 0 10px rgba(200,160,255,0.9); }
+        /* ===== 沉浸光感 (Beta，默认关闭) ===== */
+        @property --la { syntax:'<angle>'; initial-value:0deg; inherits:true; }
+        .glass { position:relative; overflow:hidden; transition:transform 0.35s cubic-bezier(0.2,1.6,0.3,1), box-shadow 0.25s, border-color 0.25s; }
+        html[data-light="strong"] .glass, html[data-light="gentle"] .glass { backdrop-filter:blur(12px) saturate(1.4); -webkit-backdrop-filter:blur(12px) saturate(1.4); background:linear-gradient(180deg, rgba(64,64,104,0.5) 0%, rgba(34,34,60,0.62) 100%) !important; }
+        html[data-light="smooth"] .glass { background:linear-gradient(180deg, rgba(30,30,50,0.95) 0%, rgba(22,22,40,0.95) 100%) !important; }
+        html[data-light="strong"] .glass::before, html[data-light="gentle"] .glass::before, html[data-light="smooth"] .glass::before { content:''; position:absolute; inset:0; border-radius:inherit; padding:1.5px; background:conic-gradient(from var(--la,0deg), transparent 0deg 250deg, rgba(255,255,255,0.85) 295deg, #ffffff 315deg, transparent 355deg); -webkit-mask:linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite:xor; mask:linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); mask-composite:exclude; pointer-events:none; opacity:0; transition:opacity 0.3s, --la 0.12s linear; }
+        html[data-light="strong"] .glass.on::before, html[data-light="gentle"] .glass.on::before { opacity:0.9; }
+        html[data-light="smooth"] .glass::before { opacity:0.3; }
+        html[data-light="strong"] .glass.pressing, html[data-light="gentle"] .glass.pressing, html[data-light="smooth"] .glass.pressing { transform:scale(0.97); }
+        .glass.wobble { animation:jellyWobble 0.45s ease-out; }
+        @keyframes jellyWobble { 0%{ transform:scale(1.06,0.9); } 30%{ transform:scale(0.955,1.06); } 55%{ transform:scale(1.025,0.975); } 80%{ transform:scale(0.995,1.006); } 100%{ transform:scale(1,1); } }
+        .glass-light { position:absolute; inset:0; border-radius:inherit; pointer-events:none; background:radial-gradient(var(--spot,150px) circle at var(--mx,-999px) var(--my,-999px), rgba(255,255,255,0.28), transparent 70%); opacity:0; transition:opacity 0.25s; }
+        .glass.on .glass-light { opacity:1; }
+        html[data-light="gentle"] { --spot:120px; }
+        html[data-light="smooth"] .glass-light, html:not([data-light]) .glass-light, html:not([data-light]) .glow-ring { display:none; }
+        .glow-ring { position:absolute; border-radius:9999px; background:radial-gradient(circle, rgba(255,246,216,0.55) 0%, rgba(240,192,96,0.28) 40%, transparent 70%); pointer-events:none; animation:glowRing 0.55s ease-out forwards; z-index:5; }
+        @keyframes glowRing { from { opacity:1; transform:translate(-50%,-50%) scale(0.4); } to { opacity:0; transform:translate(-50%,-50%) scale(2.4); } }
+        .set-item { width:90%; max-width:320px; display:flex; justify-content:space-between; align-items:center; background:var(--panel); border:2px solid var(--border); border-radius:14px; padding:14px 16px; margin:5px 0; color:#fff; font-size:14px; font-weight:700; cursor:pointer; transition:all 0.25s; touch-action:manipulation; }
+        .set-item .arr { color:#889; font-size:18px; }
+        .set-item:active { transform:scale(0.97); border-color:var(--gold); }
+        .beta-tag { font-style:normal; color:#f0a040; font-size:10px; border:1px solid #f0a040; border-radius:6px; padding:1px 5px; margin-left:2px; vertical-align:1px; }
+        .light-toggle { width:48px; height:26px; border-radius:13px; background:#3a3a55; border:2px solid var(--border); position:relative; cursor:pointer; transition:background 0.25s, border-color 0.25s; padding:0; }
+        .light-toggle .knob { position:absolute; top:1px; left:1px; width:20px; height:20px; border-radius:50%; background:#aab; transition:left 0.25s cubic-bezier(0.2,1.4,0.4,1), background 0.25s; }
+        .light-toggle.on { background:rgba(240,192,96,0.5); border-color:var(--gold); }
+        .light-toggle.on .knob { left:23px; background:var(--gold); box-shadow:0 0 10px rgba(240,192,96,0.8); }
+        .seg-btn.active { background:rgba(240,192,96,0.35) !important; border-color:#fff; color:#fff; box-shadow:0 0 18px rgba(240,192,96,0.5); }
+        .joy-wrap { position:fixed; bottom:20px; width:108px; height:108px; z-index:60; display:none; touch-action:none; user-select:none; -webkit-user-select:none; }
+        #joyMoveWrap { left:20px; }
+        #joySkillWrap { right:20px; }
+        .joy-base { position:absolute; inset:0; border-radius:50%; background:rgba(255,255,255,0.07); border:2px solid rgba(255,255,255,0.25); }
+        .joy-knob { position:absolute; left:50%; top:50%; width:44%; height:44%; border-radius:50%; background:rgba(255,255,255,0.32); border:2px solid rgba(255,255,255,0.6); box-shadow:0 2px 10px rgba(0,0,0,0.4); transform:translate(-50%,-50%); }
+        .joy-label { position:absolute; left:0; right:0; top:-20px; text-align:center; font-size:11px; color:rgba(255,255,255,0.7); font-weight:700; pointer-events:none; }
+        .joy-cd { position:absolute; inset:0; border-radius:50%; pointer-events:none; }
+        /* ===== 摇杆自定义设置 ===== */
+        .joy-preview { position:relative; width:240px; height:400px; border:2px solid var(--border); border-radius:20px; overflow:hidden; background:radial-gradient(circle at 50% 30%, #1d2038 0%, #0f0f1c 80%); touch-action:none; margin:0 auto; }
+        .jp-stick { position:absolute; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:900; color:#fff; cursor:grab; touch-action:none; user-select:none; -webkit-user-select:none; transform:translate(-50%,-50%); }
+        .jp-stick:active { cursor:grabbing; }
+        .jp-move { background:rgba(125,191,255,0.22); border:2px solid rgba(125,191,255,0.7); box-shadow:0 0 14px rgba(125,191,255,0.35); }
+        .jp-skill { background:rgba(255,180,90,0.22); border:2px solid rgba(255,180,90,0.7); box-shadow:0 0 14px rgba(255,180,90,0.35); }
+        .joy-size-row { display:flex; align-items:center; gap:8px; width:240px; margin:12px auto 0; color:#ccd; font-size:12px; font-weight:700; }
+        .joy-size-row input[type=range] { flex:1; accent-color:var(--gold); }
+        /* ===== 故事模式（3D节点地图） ===== */
+        #screenStory { justify-content:flex-start; padding:0; }
+        .story-scroll { width:100%; max-width:420px; height:100vh; height:100dvh; overflow-y:auto; overflow-x:hidden; position:relative; -webkit-overflow-scrolling:touch; padding-bottom:60px; }
+        .story-top { position:sticky; top:0; z-index:5; padding:10px 8px; display:flex; align-items:center; gap:8px; background:linear-gradient(180deg,rgba(13,13,26,0.96) 70%,rgba(13,13,26,0)); }
+        .story-world { position:relative; width:100%; }
+        .story-path-svg { position:absolute; top:0; left:0; width:100%; pointer-events:none; overflow:visible; }
+        .story-node { position:absolute; border:none; padding:0; cursor:pointer; display:flex; align-items:center; justify-content:center; font-weight:900; color:#fff; border-radius:22%; transform:translate(-50%,-50%); -webkit-tap-highlight-color:transparent; }
+        .story-node .sn-face { position:relative; z-index:2; line-height:1; }
+        .story-node.cube { width:62px; height:62px; font-size:24px; background:linear-gradient(145deg,#6fc3ff 0%,#3d7fd4 55%,#2a5ca8 100%); box-shadow:0 7px 0 #1d4380, 0 10px 18px rgba(0,0,0,0.55), inset 0 2px 3px rgba(255,255,255,0.55), inset 0 -4px 6px rgba(0,0,0,0.25); animation:snBob 3s ease-in-out infinite, snIn 0.5s cubic-bezier(0.34,1.56,0.64,1) backwards; transition:transform 0.12s ease; }
+        .story-node.cube.alt { background:linear-gradient(145deg,#8ee6a0 0%,#3fae5c 55%,#2c8043 100%); box-shadow:0 7px 0 #1e5e30, 0 10px 18px rgba(0,0,0,0.55), inset 0 2px 3px rgba(255,255,255,0.55), inset 0 -4px 6px rgba(0,0,0,0.25); }
+        .story-node.house { width:78px; height:78px; font-size:38px; border-radius:24%; background:linear-gradient(145deg,#ffd76a 0%,#e0a028 55%,#b5760f 100%); box-shadow:0 9px 0 #7a4f08, 0 14px 24px rgba(0,0,0,0.6), inset 0 2px 4px rgba(255,255,255,0.6), inset 0 -5px 7px rgba(0,0,0,0.25); animation:snGlow 2.2s ease-in-out infinite, snIn 0.5s cubic-bezier(0.34,1.56,0.64,1) backwards; }
+        .story-node.cube:active { transform:translate(-50%,calc(-50% + 5px)); box-shadow:0 2px 0 #1d4380, 0 4px 8px rgba(0,0,0,0.5), inset 0 2px 3px rgba(255,255,255,0.55); }
+        .story-node.house:active { transform:translate(-50%,calc(-50% + 7px)); box-shadow:0 2px 0 #7a4f08, 0 4px 8px rgba(0,0,0,0.5), inset 0 2px 4px rgba(255,255,255,0.6); }
+        @keyframes snBob { 0%,100%{ margin-top:0; } 50%{ margin-top:-7px; } }
+        @keyframes snGlow { 0%,100%{ filter:drop-shadow(0 0 6px rgba(240,192,96,0.5)); } 50%{ filter:drop-shadow(0 0 18px rgba(240,192,96,0.95)); } }
+        @keyframes snIn { from{ opacity:0; transform:translate(-50%,-50%) translateY(34px) scale(0.5); } to{ opacity:1; transform:translate(-50%,-50%) translateY(0) scale(1); } }
+        .story-deco { position:absolute; font-size:22px; opacity:0.5; pointer-events:none; animation:snBob 4s ease-in-out infinite; }
+        /* ===== 密码弹窗 ===== */
+        .pwd-input { width:100%; padding:12px 14px; font-size:17px; letter-spacing:4px; text-align:center; border-radius:10px; border:2px solid var(--border); background:#0f1020; color:#fff; outline:none; margin:12px 0 6px; }
+        .pwd-input:focus { border-color:var(--gold); box-shadow:0 0 14px rgba(240,192,96,0.35); }
+        .pwd-input.shake { animation:pwdShake 0.4s; border-color:#e74c3c; }
+        @keyframes pwdShake { 0%,100%{ transform:translateX(0); } 20%{ transform:translateX(-9px); } 40%{ transform:translateX(8px); } 60%{ transform:translateX(-6px); } 80%{ transform:translateX(4px); } }
+        .pwd-err { color:#ff7a7a; font-size:11px; min-height:15px; text-align:center; }
+        /* ===== 身份验证通过动画 ===== */
+        #authOkOverlay { position:fixed; inset:0; z-index:90; display:none; align-items:center; justify-content:center; flex-direction:column; background:radial-gradient(circle at 50% 45%, rgba(16,34,26,0.92) 0%, rgba(8,10,16,0.97) 70%); }
+        #authOkOverlay.show { display:flex; animation:authBg 0.25s ease both; }
+        @keyframes authBg { from{ opacity:0; } to{ opacity:1; } }
+        .auth-ring-box { position:relative; width:108px; height:108px; margin-bottom:20px; animation:authPop 0.5s cubic-bezier(0.34,1.56,0.64,1) both; }
+        @keyframes authPop { 0%{ transform:scale(0.3); opacity:0; } 100%{ transform:scale(1); opacity:1; } }
+        .auth-ring { position:absolute; inset:0; transform:rotate(-90deg); filter:drop-shadow(0 0 12px rgba(80,255,160,0.7)); }
+        .auth-ring circle { fill:none; stroke:#34e08a; stroke-width:5; stroke-linecap:round; stroke-dasharray:302; stroke-dashoffset:302; }
+        #authOkOverlay.show .auth-ring circle { animation:authDraw 0.5s cubic-bezier(0.65,0,0.35,1) 0.12s forwards; }
+        @keyframes authDraw { to{ stroke-dashoffset:0; } }
+        .auth-check { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:52px; color:#4dff9e; text-shadow:0 0 18px rgba(77,255,158,0.9); transform:scale(0); }
+        #authOkOverlay.show .auth-check { animation:authCheck 0.35s cubic-bezier(0.34,1.8,0.64,1) 0.5s forwards; }
+        @keyframes authCheck { 0%{ transform:scale(0) rotate(-30deg); } 60%{ transform:scale(1.25) rotate(4deg); } 100%{ transform:scale(1) rotate(0); } }
+        .auth-text { font-size:21px; font-weight:900; letter-spacing:4px; background:linear-gradient(180deg,#eafff2 0%,#4dff9e 55%,#1fae63 100%); -webkit-background-clip:text; background-clip:text; color:transparent; opacity:0; }
+        #authOkOverlay.show .auth-text { animation:authText 0.45s cubic-bezier(0.34,1.56,0.64,1) 0.62s both; }
+        @keyframes authText { from{ opacity:0; transform:translateY(16px) scale(0.8); } to{ opacity:1; transform:translateY(0) scale(1); } }
+        .auth-sub { margin-top:8px; font-size:11px; color:#6f9; letter-spacing:6px; opacity:0; }
+        #authOkOverlay.show .auth-sub { animation:authText 0.4s ease 0.8s both; }
+        .auth-sweep { position:absolute; top:0; bottom:0; left:0; width:30%; background:linear-gradient(90deg,transparent,rgba(77,255,158,0.16),transparent); transform:translateX(-180%) skewX(-18deg); pointer-events:none; }
+        #authOkOverlay.show .auth-sweep { animation:authSweep 0.55s ease-out 0.3s forwards; }
+        @keyframes authSweep { to{ transform:translateX(420%) skewX(-18deg); } }
+        #authOkOverlay.leave { animation:authLeave 0.28s ease forwards; }
+        @keyframes authLeave { to{ opacity:0; transform:scale(1.06); } }
+        /* ===== 故事模式·序章（卧室剧情） ===== */
+        #screenStoryScene { position:fixed; inset:0; z-index:5; height:100vh; height:100dvh; justify-content:flex-start; padding:0; gap:0; overflow:hidden; background:#0d0d1a; }
+        .scene-stage { position:relative; flex:1 1 auto; min-height:0; width:100%; max-width:420px; overflow:hidden; }
+        /* —— 俯视平面视角：整层木地板 + 顶部墙带 —— */
+        .room-floor { position:absolute; inset:0; background:repeating-linear-gradient(0deg,#6b4a2e 0 26px,#614329 26px 28px,#6b4a2e 28px 54px,#5d3f27 54px 56px); }
+        .room-floor:after { content:''; position:absolute; inset:0; background:radial-gradient(ellipse at 50% 40%,transparent 52%,rgba(0,0,0,0.42) 100%); pointer-events:none; }
+        .rug { position:absolute; left:22%; top:44%; width:32%; height:32%; border-radius:50%; background:radial-gradient(circle,#7d5a9e 0%,#6a4a8a 58%,#5a3e78 100%); box-shadow:inset 0 0 0 5px rgba(255,255,255,0.10),inset 0 0 0 11px rgba(255,255,255,0.06),0 3px 10px rgba(0,0,0,0.3); z-index:1; }
+        .wall-band { position:absolute; left:0; right:0; top:0; height:6.5%; background:linear-gradient(180deg,#3c2a17 0%,#4a311c 55%,#2e1f10 100%); border-bottom:3px solid #241708; box-shadow:0 3px 8px rgba(0,0,0,0.35); z-index:2; }
+        .room-window { position:absolute; top:0; right:10%; width:15%; height:6.5%; background:linear-gradient(180deg,#fff3cd,#ffd98e); border-left:4px solid #241708; border-right:4px solid #241708; box-shadow:0 0 26px rgba(255,210,120,0.75); z-index:2; }
+        .room-window:before { content:''; position:absolute; inset:0; background:linear-gradient(90deg,transparent 46%,rgba(140,100,40,0.5) 46% 54%,transparent 54%); }
+        .win-pool { position:absolute; top:6%; right:1%; width:54%; height:60%; background:linear-gradient(180deg,rgba(255,228,150,0.30),rgba(255,228,150,0.10) 68%,transparent); clip-path:polygon(30% 0,74% 0,100% 100%,4% 100%); animation:rayBreath 5.5s ease-in-out infinite; z-index:1; pointer-events:none; }
+        @keyframes rayBreath { 0%,100%{ opacity:.6; } 50%{ opacity:1; } }
+        .room-door { position:absolute; top:0; left:7%; width:16%; height:6.5%; z-index:4; }
+        .door-hole { position:absolute; inset:0; background:linear-gradient(180deg,#fff0c0 0%,#e8b96a 100%); opacity:0; transition:opacity .3s ease; box-shadow:0 0 22px rgba(255,205,120,0.6); }
+        .room-door.open .door-hole { opacity:1; }
+        .door-panel { position:absolute; inset:-1px; border:2px solid #46301b; border-radius:3px; background:linear-gradient(180deg,#8a5f38 0%,#6d4a28 60%,#5d3d20 100%); box-shadow:2px 2px 5px rgba(0,0,0,0.35); transform-origin:left center; transform:rotate(0deg); transition:transform .55s cubic-bezier(0.5,0,0.35,1); }
+        .room-door.open .door-panel { transform:rotate(104deg); }
+        .door-knob { position:absolute; right:4px; top:50%; width:6px; height:6px; margin-top:-3px; border-radius:50%; background:radial-gradient(circle at 35% 30%,#ffeab0,#c08f3e 70%,#7d5a20); }
+        .door-light { position:absolute; top:88%; left:-12%; width:200%; height:560%; background:linear-gradient(165deg,rgba(255,216,140,0.40),rgba(255,216,140,0.10) 58%,transparent 85%); clip-path:polygon(0 0,62% 0,100% 100%,0 100%); opacity:0; transition:opacity .55s ease .12s; pointer-events:none; z-index:1; }
+        .room-door.open .door-light { opacity:1; }
+        .bed { position:absolute; left:57%; top:13%; width:33%; height:47%; background:linear-gradient(180deg,#8a6038,#6d4a28); border-radius:8px; box-shadow:0 4px 12px rgba(0,0,0,0.4),inset 0 0 0 3px rgba(0,0,0,0.15); z-index:2; }
+        .bed-head { position:absolute; left:0; right:0; top:0; height:9%; background:linear-gradient(180deg,#7a5230,#5d3d20); border-radius:8px 8px 0 0; }
+        .bed-mat { position:absolute; left:4%; right:4%; top:11%; bottom:4%; background:linear-gradient(180deg,#f4ecd8,#ddd1b4); border-radius:6px; }
+        .bed-pillow { position:absolute; left:7%; top:14%; width:38%; height:15%; background:#fff; border-radius:9px; box-shadow:inset 0 -3px 6px rgba(0,0,0,0.10); }
+        .bed-pillow2 { position:absolute; right:7%; top:14%; width:38%; height:15%; background:#f2ede0; border-radius:9px; box-shadow:inset 0 -3px 6px rgba(0,0,0,0.10); }
+        .bed-blanket { position:absolute; left:4%; right:4%; top:36%; bottom:4%; background:linear-gradient(180deg,#5a8fd6,#3a63a8); border-radius:6px; box-shadow:inset 0 5px 0 rgba(255,255,255,0.20),inset 0 -10px 18px rgba(0,0,0,0.18); }
+        .bed-blanket:before { content:''; position:absolute; left:0; right:0; top:26%; height:5px; background:rgba(255,255,255,0.14); }
+        .bed-blanket:after { content:''; position:absolute; left:0; right:0; bottom:30%; height:5px; background:rgba(0,0,0,0.10); }
+        .nightstand { position:absolute; left:91.5%; top:15%; width:7%; height:12%; background:linear-gradient(180deg,#8a6038,#5d3d20); border-radius:4px; box-shadow:0 3px 8px rgba(0,0,0,0.4),inset 0 0 0 2px rgba(0,0,0,0.18); z-index:2; }
+        .room-alarm { position:absolute; left:91.5%; top:18.5%; width:7%; text-align:center; font-size:15px; line-height:1; z-index:3; transform-origin:50% 90%; filter:drop-shadow(0 2px 2px rgba(0,0,0,0.5)); }
+        .room-alarm.ring { animation:alarmRing 0.18s linear infinite; }
+        @keyframes alarmRing { 0%,100%{ transform:rotate(-24deg) translateY(0); } 50%{ transform:rotate(24deg) translateY(-2px); } }
+        .desk { position:absolute; left:5%; top:66%; width:24%; height:26%; background:linear-gradient(180deg,#8a6038,#6d4a28); border-radius:5px; box-shadow:0 4px 10px rgba(0,0,0,0.4),inset 0 0 0 3px rgba(0,0,0,0.15); z-index:2; }
+        .desk-monitor { position:absolute; left:10%; top:10%; width:52%; height:34%; background:#0d0f1c; border-radius:3px; border:2px solid #22242e; box-shadow:0 0 14px rgba(90,140,255,0.5); }
+        .desk-monitor:after { content:''; position:absolute; inset:12%; background:linear-gradient(135deg,rgba(90,140,255,0.35),rgba(180,90,255,0.20)); border-radius:2px; animation:rayBreath 4s ease-in-out infinite; }
+        .desk-kb { position:absolute; left:12%; top:58%; width:48%; height:12%; background:#2c2f3e; border-radius:3px; box-shadow:inset 0 -2px 0 rgba(0,0,0,0.4); }
+        .desk-chair { position:absolute; right:3%; top:32%; width:36%; height:44%; border-radius:50%; background:radial-gradient(circle at 40% 35%,#5a6a96,#3a4468 70%); box-shadow:inset 0 0 0 4px #2c3550,0 3px 8px rgba(0,0,0,0.35); }
+        .slippers { position:absolute; left:61%; top:66%; font-size:15px; letter-spacing:5px; transform:rotate(22deg); opacity:0.9; z-index:2; filter:drop-shadow(0 2px 2px rgba(0,0,0,0.4)); }
+        .dust { position:absolute; width:3px; height:3px; border-radius:50%; background:rgba(255,242,205,0.75); box-shadow:0 0 6px rgba(255,240,200,0.7); opacity:0; animation:dustFly linear infinite; z-index:2; pointer-events:none; }
+        .d1 { left:66%; top:34%; animation-duration:7s; animation-delay:.6s; }
+        .d2 { left:78%; top:46%; animation-duration:9s; animation-delay:2.1s; }
+        .d3 { left:60%; top:52%; animation-duration:8s; animation-delay:3.4s; }
+        .d4 { left:84%; top:26%; animation-duration:10s; animation-delay:4.8s; }
+        @keyframes dustFly { 0%{ opacity:0; transform:translate(0,26px); } 18%{ opacity:.8; } 82%{ opacity:.5; } 100%{ opacity:0; transform:translate(20px,-120px); } }
+        .room-actor { position:relative; display:flex; flex-direction:column; align-items:center; z-index:3; }
+        .room-actor .ra-emoji { font-size:52px; line-height:1; filter:drop-shadow(0 4px 5px rgba(0,0,0,0.4)); }
+        .room-actor .ra-tag { margin-top:3px; font-size:10px; font-weight:900; color:#fff; background:rgba(0,0,0,0.45); padding:1px 8px; border-radius:8px; }
+        .actor-slot { position:absolute; transition:transform 1.05s cubic-bezier(0.22,0.85,0.3,1),opacity .5s ease; }
+        .actor-slot.off { transform:translate(-210px,-150px); opacity:0; }
+        #slotFq { left:16%; top:36%; z-index:5; }
+        #slotMq { left:16%; top:60%; z-index:5; transition-delay:0.2s; }
+        #actorLz { position:absolute; left:63%; top:29%; transition:transform 0.2s; z-index:3; }
+        #actorLz .ra-emoji { font-size:40px; transition:transform 0.5s ease; }
+        #actorLz.sleeping .ra-emoji { transform:rotate(-78deg); }
+        #actorMq .ra-emoji { font-size:44px; }
+        #actorMq { opacity:0.92; }
+        .zzz { position:absolute; left:58%; top:-14px; pointer-events:none; display:none; }
+        #actorLz.sleeping .zzz { display:block; }
+        .zzz span { position:absolute; left:0; top:0; font-weight:900; color:#c4d4ff; text-shadow:0 0 6px rgba(160,190,255,0.7); opacity:0; }
+        .zzz span:nth-child(1){ font-size:12px; animation:zzzFloat 2.6s ease-in infinite; }
+        .zzz span:nth-child(2){ font-size:15px; left:9px; animation:zzzFloat 2.6s ease-in 0.85s infinite; }
+        .zzz span:nth-child(3){ font-size:18px; left:18px; animation:zzzFloat 2.6s ease-in 1.7s infinite; }
+        @keyframes zzzFloat { 0%{ opacity:0; transform:translate(0,8px) scale(0.7); } 30%{ opacity:0.95; } 100%{ opacity:0; transform:translate(16px,-30px) scale(1.15); } }
+        .room-actor.speaking { animation:actorSpeak 0.45s ease infinite; }
+        @keyframes actorSpeak { 0%,100%{ transform:translateY(0) scale(1); } 50%{ transform:translateY(-7px) scale(1.08); } }
+        .room-actor.speaking .ra-tag { background:rgba(240,192,96,0.9); color:#222; }
+        .dlg-box { position:relative; flex:0 0 150px; height:150px; box-sizing:border-box; margin:0; width:100%; max-width:420px; background:linear-gradient(180deg,rgba(24,27,48,0.60),rgba(12,13,26,0.72)); -webkit-backdrop-filter:blur(7px) saturate(1.25); backdrop-filter:blur(7px) saturate(1.25); border:none; border-top:2px solid rgba(240,192,96,0.55); border-radius:20px 20px 0 0; padding:10px 16px 8px; box-shadow:0 -8px 32px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.10); cursor:pointer; z-index:10; }
+        .dlg-text { color:#f6f7fc; font-size:15px; line-height:1.6; height:62px; overflow:hidden; text-shadow:0 1px 4px rgba(0,0,0,0.75); }
+        .dlg-speaker { display:flex; align-items:center; gap:6px; margin-bottom:4px; min-height:22px; height:22px; text-shadow:0 1px 4px rgba(0,0,0,0.7); }
+        .dlg-speaker .ds-emoji { font-size:20px; }
+        .dlg-speaker b { color:var(--gold); font-size:14px; }
+        .dlg-text.nar { text-align:center; color:#c9cfe6; font-style:italic; }
+        .dlg-next { position:absolute; right:14px; bottom:7px; font-size:10px; color:#9aa; animation:dlgBlink 0.9s steps(1) infinite; }
+        @keyframes dlgBlink { 50%{ opacity:0.25; } }
+        .dlg-caret { display:inline-block; width:8px; }
+        .story-quit { position:absolute; top:10px; left:10px; z-index:20; padding:6px 12px; }
+        #screenStoryScene.over-lid .dlg-box { z-index:85; }
+        /* ===== 全屏眨眼（眼睑边缘内凹，上下弧严格吻合） ===== */
+        #blinkOverlay { position:fixed; inset:0; z-index:80; pointer-events:none; }
+        .lid { position:absolute; left:0; right:0; height:53.5%; background:radial-gradient(ellipse at 50% 100%,#0b0b13 0%,#000 80%); will-change:transform; }
+        .lid-top { top:0; transform:scaleY(0); transform-origin:top; -webkit-mask:radial-gradient(ellipse 50% 13% at 50% 100%,transparent 98.4%,#000 100%); mask:radial-gradient(ellipse 50% 13% at 50% 100%,transparent 98.4%,#000 100%); box-shadow:inset 0 -16px 30px rgba(0,0,0,0.8); }
+        .lid-bottom { bottom:0; transform:scaleY(0); transform-origin:bottom; border-radius:50% 50% 0 0/13% 13% 0 0; background:radial-gradient(ellipse at 50% 0%,#0b0b13 0%,#000 80%); box-shadow:inset 0 16px 30px rgba(0,0,0,0.8); }
+        .lid-top::after { content:''; position:absolute; left:0; right:0; bottom:-1px; height:9px; background:repeating-linear-gradient(100deg,transparent 0 26px,rgba(172,178,206,0.18) 26px 28px,transparent 28px 54px); opacity:0.5; }
+        .blink-close .lid-top { animation:lidC 0.16s cubic-bezier(0.55,0,0.9,0.2) forwards; }
+        .blink-close .lid-bottom { animation:lidC 0.16s cubic-bezier(0.55,0,0.9,0.2) forwards; }
+        .blink-open .lid-top { animation:lidO 0.32s cubic-bezier(0.18,0.7,0.3,1) forwards; }
+        .blink-open .lid-bottom { animation:lidO 0.32s cubic-bezier(0.18,0.7,0.3,1) forwards; }
+        @keyframes lidC { from{ transform:scaleY(0); } to{ transform:scaleY(1); } }
+        @keyframes lidO { 0%{ transform:scaleY(1); } 55%{ transform:scaleY(0.82); } 100%{ transform:scaleY(0); } }
+        .blink-alarm .lid-top, .blink-alarm .lid-bottom { animation:lidA 1.04s cubic-bezier(0.4,0,0.3,1) forwards; }
+        @keyframes lidA { 0%{ transform:scaleY(0); } 9%{ transform:scaleY(1); } 28%{ transform:scaleY(1); } 38%{ transform:scaleY(0.28); } 47%{ transform:scaleY(1); } 57%{ transform:scaleY(1); } 100%{ transform:scaleY(0); } }
+        /* ===== 全屏决斗邀请 ===== */
+        #screenDuelInvite { position:fixed; inset:0; z-index:6; padding:24px 18px; background:radial-gradient(circle at 50% 36%,#4a1420 0%,#1b0a11 52%,#070509 100%); justify-content:center; overflow:hidden; }
+        .iv-rays { position:absolute; width:170vmax; height:170vmax; top:44%; left:50%; margin:-85vmax 0 0 -85vmax; background:repeating-conic-gradient(from 0deg,rgba(255,70,70,0.10) 0deg 7deg,transparent 7deg 16deg); animation:diSpin 7s linear infinite; pointer-events:none; }
+        .iv-card { position:relative; width:min(88vw,340px); border:2px solid rgba(255,96,96,0.8); border-radius:22px; background:linear-gradient(180deg,rgba(38,17,24,0.95),rgba(13,9,14,0.96)); box-shadow:0 0 54px rgba(255,50,50,0.4),0 26px 60px rgba(0,0,0,0.75),inset 0 1px 0 rgba(255,255,255,0.08); padding:24px 20px 22px; text-align:center; animation:ivCardIn 0.5s cubic-bezier(0.2,1.5,0.4,1) backwards,ivCardShake 3.4s ease-in-out 0.65s infinite; }
+        @keyframes ivCardIn { from{ transform:scale(0.6) translateY(34px); opacity:0; } to{ transform:scale(1) translateY(0); opacity:1; } }
+        @keyframes ivCardShake { 0%,100%{ transform:translate(0,0); } 25%{ transform:translate(-1.6px,1px); } 75%{ transform:translate(1.6px,-1px); } }
+        .iv-cross { font-size:54px; line-height:1; filter:drop-shadow(0 0 14px rgba(255,80,80,0.65)); animation:ivCrossIn 0.55s cubic-bezier(0.2,1.7,0.4,1) 0.1s backwards,ivGlow 1.5s ease-in-out 0.75s infinite; }
+        @keyframes ivCrossIn { from{ transform:rotate(-110deg) scale(0); opacity:0; } to{ transform:rotate(0) scale(1); opacity:1; } }
+        @keyframes ivGlow { 0%,100%{ filter:drop-shadow(0 0 10px rgba(255,80,80,0.45)); } 50%{ filter:drop-shadow(0 0 22px rgba(255,110,110,0.85)); } }
+        .iv-title { margin:8px 0 10px; font-size:26px; font-weight:900; letter-spacing:8px; background:linear-gradient(180deg,#ffe9c8 0%,#f0a838 55%,#e0563f 100%); -webkit-background-clip:text; background-clip:text; color:transparent; animation:ivFadeUp 0.45s ease 0.22s backwards; }
+        @keyframes ivFadeUp { from{ opacity:0; transform:translateY(14px); } to{ opacity:1; transform:translateY(0); } }
+        .iv-avatar { font-size:76px; line-height:1.1; animation:ivAvatarIn 0.5s cubic-bezier(0.2,1.6,0.4,1) 0.3s backwards; }
+        @keyframes ivAvatarIn { from{ transform:scale(0.2) rotate(-12deg); opacity:0; } to{ transform:scale(1) rotate(0); opacity:1; } }
+        .iv-line { margin:10px 2px 4px; font-size:17px; color:#f2f2f8; line-height:1.5; animation:ivFadeUp 0.45s ease 0.42s backwards; }
+        .iv-line b { font-size:19px; }
+        .iv-from { color:#ff8a8a; text-shadow:0 0 12px rgba(255,80,80,0.6); }
+        .iv-to { color:#8fc4ff; text-shadow:0 0 12px rgba(90,160,255,0.55); }
+        .iv-sub { margin-bottom:20px; font-size:12px; color:#b09aa8; letter-spacing:1px; animation:ivFadeUp 0.45s ease 0.52s backwards; }
+        .iv-btns { display:flex; gap:12px; }
+        .iv-btn { flex:1; padding:15px 0; font-size:15px; border-radius:26px; min-width:0; }
+        #btnIvRefuse { animation:ivFadeUp 0.45s ease 0.62s backwards; }
+        #btnIvAccept { animation:ivFadeUp 0.45s ease 0.74s backwards,ivAcceptPulse 1.3s ease-in-out 1.3s infinite; }
+        @keyframes ivAcceptPulse { 0%,100%{ box-shadow:0 0 0 rgba(92,184,92,0); } 50%{ box-shadow:0 0 30px rgba(92,184,92,0.55); } }
+        /* ===== 序章决斗动画 ===== */
+        #screenDuelIntro { background:radial-gradient(circle at 50% 42%,#3a1420 0%,#0b0b12 72%); }
+        .di-rays { position:absolute; width:160vmax; height:160vmax; top:50%; left:50%; margin:-80vmax 0 0 -80vmax; background:repeating-conic-gradient(from 0deg,rgba(255,80,80,0.10) 0deg 7deg,transparent 7deg 15deg); animation:diSpin 7s linear infinite; }
+        @keyframes diSpin { to{ transform:rotate(360deg); } }
+        .di-arena { position:relative; display:flex; align-items:center; justify-content:center; width:100%; }
+        .di-card { width:132px; padding:14px 6px 10px; border-radius:16px; text-align:center; border:3px solid; background:rgba(18,20,36,0.92); box-shadow:0 12px 30px rgba(0,0,0,0.6); }
+        .di-left { border-color:#ff5a5a; box-shadow:0 0 34px rgba(255,60,60,0.55),0 12px 30px rgba(0,0,0,0.6); animation:diL 0.62s cubic-bezier(0.2,1.5,0.4,1) both; }
+        .di-right { border-color:#6ab7ff; box-shadow:0 0 34px rgba(80,170,255,0.55),0 12px 30px rgba(0,0,0,0.6); animation:diR 0.62s cubic-bezier(0.2,1.5,0.4,1) both; }
+        @keyframes diL { from{ transform:translateX(-130vw) rotate(-24deg); opacity:0; } to{ transform:translateX(0) rotate(0); opacity:1; } }
+        @keyframes diR { from{ transform:translateX(130vw) rotate(24deg); opacity:0; } to{ transform:translateX(0) rotate(0); opacity:1; } }
+        .di-emoji { font-size:52px; }
+        .di-nm { font-weight:900; color:#fff; margin:4px 0; }
+        .di-hp { font-size:11px; color:#f99; }
+        .di-vs { font-size:66px; font-weight:900; margin:0 8px; background:linear-gradient(180deg,#fff 0%,#ffd24a 45%,#ff3b3b 100%); -webkit-background-clip:text; background-clip:text; color:transparent; text-shadow:0 0 36px rgba(255,70,70,0.55); animation:diVS 0.5s cubic-bezier(0.2,1.8,0.4,1) 0.28s both, diVSPulse 0.7s ease-in-out 1s infinite; }
+        @keyframes diVS { from{ transform:scale(6) rotate(-14deg); opacity:0; } to{ transform:scale(1) rotate(0); opacity:1; } }
+        @keyframes diVSPulse { 0%,100%{ transform:scale(1); } 50%{ transform:scale(1.12); } }
+        .di-flash { position:absolute; inset:0; background:#fff; opacity:0; pointer-events:none; }
+        #screenDuelIntro.go .di-flash { animation:diFlash 0.5s ease 0.42s; }
+        @keyframes diFlash { 0%{ opacity:0; } 18%{ opacity:0.85; } 100%{ opacity:0; } }
+        .di-shake { animation:diShake 0.5s 0.3s; }
+        @keyframes diShake { 0%,100%{ transform:translate(0,0); } 20%{ transform:translate(-9px,5px); } 40%{ transform:translate(8px,-6px); } 60%{ transform:translate(-6px,-4px); } 80%{ transform:translate(5px,5px); } }
+        .di-clash { position:absolute; font-size:70px; opacity:0; }
+        #screenDuelIntro.go .di-clash { animation:diClash 0.45s ease 0.44s; }
+        @keyframes diClash { 0%{ opacity:0; transform:scale(0.2) rotate(-30deg); } 40%{ opacity:1; transform:scale(1.35) rotate(6deg); } 100%{ opacity:0; transform:scale(1.8) rotate(0); } }
+        .di-tag { margin-top:26px; color:#ff8a8a; font-size:13px; letter-spacing:5px; font-weight:900; animation:diTagIn 0.5s ease 0.75s both; }
+        @keyframes diTagIn { from{ opacity:0; letter-spacing:14px; } to{ opacity:1; letter-spacing:5px; } }
+        /* ===== 故事结算（星级） ===== */
+        #screenStoryResult { background:radial-gradient(circle at 50% 38%,#1b2240 0%,#0a0b14 75%); }
+        #screenStoryResult.fail { background:radial-gradient(circle at 50% 38%,#3a1418 0%,#0a0b12 75%); }
+        .sr-rays { position:absolute; width:150vmax; height:150vmax; top:42%; left:50%; margin:-75vmax 0 0 -75vmax; background:repeating-conic-gradient(rgba(240,200,90,0.07) 0deg 8deg,transparent 8deg 18deg); animation:diSpin 26s linear infinite; pointer-events:none; }
+        .sr-title { font-size:30px; font-weight:900; letter-spacing:4px; margin-bottom:6px; opacity:0; color:#f0c864; text-shadow:0 0 26px rgba(240,192,96,0.6); }
+        .sr-title.in { animation:srPop 0.5s cubic-bezier(0.34,1.7,0.64,1) both; }
+        .sr-face { font-size:76px; margin-bottom:14px; opacity:0; }
+        .sr-face.in { animation:srPop 0.55s cubic-bezier(0.34,1.7,0.64,1) both; }
+        @keyframes srPop { from{ opacity:0; transform:scale(0.2) translateY(20px); } to{ opacity:1; transform:scale(1) translateY(0); } }
+        .sr-stars { display:flex; gap:8px; margin-bottom:12px; }
+        .sr-star { font-size:44px; color:#3a3f57; transform:scale(0.6); opacity:0.5; }
+        .sr-star.lit { color:#ffd34d; opacity:1; text-shadow:0 0 22px rgba(255,200,60,0.95); animation:srStar 0.55s cubic-bezier(0.3,1.9,0.5,1) forwards; }
+        .sr-star.lit:after { content:''; }
+        @keyframes srStar { 0%{ transform:scale(0) rotate(-40deg); } 60%{ transform:scale(1.45) rotate(8deg); } 100%{ transform:scale(1) rotate(0); } }
+        .sr-rate { color:#cdd; font-size:15px; font-weight:900; letter-spacing:3px; min-height:22px; margin-bottom:18px; }
+        .sr-btns { display:none; gap:10px; }
+        .sr-btns.show { display:flex; }
+        #screenStoryResult.shake { animation:diShake 0.5s; }
+        /* ===== 更多动画（开发者选项，默认关） ===== */
+        html[data-anim="1"] .screen.active { animation:screenIn 0.55s cubic-bezier(0.34,1.56,0.64,1); }
+        @keyframes screenIn { from { opacity:0; transform:translateY(36px) scale(0.92); } to { opacity:1; transform:translateY(0) scale(1); } }
+        html[data-anim="1"] .game-title { animation:titlePop 0.6s cubic-bezier(0.34,1.56,0.64,1) both; }
+        @keyframes titlePop { 0%{ opacity:0; transform:scale(0.5) rotate(-8deg); } 60%{ transform:scale(1.12) rotate(2deg); } 100%{ opacity:1; transform:scale(1) rotate(0); } }
+        html[data-anim="1"] .btn { transition: transform 0.35s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.3s, background 0.3s, border-color 0.3s; }
+        html[data-anim="1"] .btn:hover { transform:translateY(-3px) scale(1.05); box-shadow:0 8px 24px rgba(240,192,96,0.4); }
+        html[data-anim="1"] .btn:active { transform:translateY(0) scale(0.93); transition: transform 0.12s cubic-bezier(0.4,0,0.2,1); }
+        html[data-anim="1"] .set-item { transition: transform 0.35s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.3s, background 0.3s; }
+        html[data-anim="1"] .set-item:hover { transform:translateX(6px) scale(1.02); box-shadow:0 4px 16px rgba(240,192,96,0.25); }
+        html[data-anim="1"] .set-item:active { transform:translateX(0) scale(0.96); }
+        html[data-anim="1"] .card-display { transition: transform 0.4s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.3s, border-color 0.3s; will-change:transform; }
+        html[data-anim="1"] .card-display:hover { transform:translateY(-6px) scale(1.04); box-shadow:0 10px 28px rgba(240,192,96,0.35); }
+        html[data-anim="1"] .card-display.selected { animation:cardSel 0.5s cubic-bezier(0.34,1.56,0.64,1); }
+        @keyframes cardSel { 0%{ transform:scale(1); } 40%{ transform:scale(1.15); } 100%{ transform:scale(1.07); } }
+        html[data-anim="1"] .card-in { animation:cardIn 0.5s cubic-bezier(0.34,1.56,0.64,1) both; }
+        @keyframes cardIn { from { opacity:0; transform:translateY(24px) scale(0.8) rotate(-6deg); } to { opacity:1; transform:translateY(0) scale(1) rotate(0); } }
+        html[data-anim="1"] .light-toggle { transition: background 0.3s cubic-bezier(0.34,1.56,0.64,1), border-color 0.3s; }
+        html[data-anim="1"] .light-toggle .knob { transition: left 0.35s cubic-bezier(0.34,1.56,0.64,1), background 0.3s, box-shadow 0.3s; }
+        html[data-anim="1"] .modal-overlay.active { animation:overlayFade 0.3s ease both; }
+        @keyframes overlayFade { from{ opacity:0; } to{ opacity:1; } }
+        html[data-anim="1"] .modal-overlay.active .modal-box { animation:modalPop 0.5s cubic-bezier(0.34,1.56,0.64,1) both; }
+        @keyframes modalPop { 0%{ opacity:0; transform:scale(0.5) translateY(40px); } 60%{ transform:scale(1.04) translateY(-4px); } 100%{ opacity:1; transform:scale(1) translateY(0); } }
+        html[data-anim="1"] .modal-box li { animation:liIn 0.4s cubic-bezier(0.34,1.56,0.64,1) both; }
+        @keyframes liIn { from{ opacity:0; transform:translateX(-20px); } to{ opacity:1; transform:translateX(0); } }
+        html[data-anim="1"] .modal-box li:nth-child(1){ animation-delay:0.15s; }
+        html[data-anim="1"] .modal-box li:nth-child(2){ animation-delay:0.22s; }
+        html[data-anim="1"] .modal-box li:nth-child(3){ animation-delay:0.29s; }
+        html[data-anim="1"] .modal-box li:nth-child(4){ animation-delay:0.36s; }
+        html[data-anim="1"] .modal-box li:nth-child(5){ animation-delay:0.43s; }
+        html[data-anim="1"] .modal-box li:nth-child(6){ animation-delay:0.50s; }
+        html[data-anim="1"] .modal-box li:nth-child(7){ animation-delay:0.57s; }
+        html[data-anim="1"] .modal-box li:nth-child(8){ animation-delay:0.64s; }
+        html[data-anim="1"] .modal-box li:nth-child(9){ animation-delay:0.71s; }
+        html[data-anim="1"] .modal-box li:nth-child(10){ animation-delay:0.78s; }
+        #screenVS { position:fixed; inset:0; width:100vw; height:100vh; height:100dvh; z-index:50; justify-content:center; overflow:hidden; background:radial-gradient(circle at 50% 45%, #262640 0%, #12121e 55%, #0d0d1a 100%); }
+        .vs-arena { position:relative; max-width:420px; height:210px; display:flex; align-items:center; justify-content:center; gap:14px; overflow:visible; animation:vsShake 0.3s linear 0.35s; }
+        .vs-rays { position:absolute; top:50%; left:50%; width:150vmax; height:150vmax; margin:-75vmax 0 0 -75vmax; background:repeating-conic-gradient(from 0deg, transparent 0deg 14deg, rgba(240,192,96,0.10) 14deg 17deg); border-radius:50%; animation:vsSpin 5s linear infinite; pointer-events:none; }
+        @keyframes vsSpin { to{ transform:rotate(360deg); } }
+        .vs-card { width:132px; padding:16px 6px; background:var(--card-bg); border:3px solid var(--gold); border-radius:16px; text-align:center; box-shadow:0 0 30px rgba(0,0,0,0.6); position:relative; z-index:2; }
+        .vs-card-left { animation:vsSlideL 0.35s cubic-bezier(0.2,1.4,0.4,1) both; }
+        .vs-card-right { animation:vsSlideR 0.35s cubic-bezier(0.2,1.4,0.4,1) both; }
+        @keyframes vsSlideL { from{ transform:translateX(-60vw) rotate(-14deg); opacity:0; } to{ transform:translateX(0) rotate(0deg); opacity:1; } }
+        @keyframes vsSlideR { from{ transform:translateX(60vw) rotate(14deg); opacity:0; } to{ transform:translateX(0) rotate(0deg); opacity:1; } }
+        .vs-avatar { font-size:46px; display:block; line-height:1.1; }
+        .vs-name { font-weight:900; font-size:14px; color:#fff; margin-top:2px; }
+        .vs-hp { color:#ff6b6b; font-size:11px; font-weight:700; }
+        .vs-logo { position:relative; z-index:3; font-size:64px; font-weight:900; font-style:italic; letter-spacing:2px; background:linear-gradient(180deg,#fff6d8 0%,#f0c060 45%,#c98f1b 100%); -webkit-background-clip:text; background-clip:text; color:transparent; animation:vsSlam 0.4s cubic-bezier(0.2,1.6,0.3,1) 0.25s both, vsPulse 0.6s ease-in-out 0.65s infinite alternate; }
+        .vs-logo.small3 { font-size:clamp(38px,11vw,54px); letter-spacing:8px; }
+        .vs-card.mini { position:absolute; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; height:0; animation:brawlIn 0.55s cubic-bezier(0.2,1.4,0.4,1) both; }
+        @keyframes brawlIn { from { transform:translate(var(--fx),var(--fy)) rotate(-450deg) scale(0.6); opacity:0; } 55% { opacity:1; } to { transform:translate(0,0) rotate(0deg) scale(1); opacity:1; } }
+        @keyframes vsSlam { 0%{ transform:scale(6) rotate(-30deg); opacity:0; } 55%{ transform:scale(0.85) rotate(4deg); opacity:1; } 100%{ transform:scale(1) rotate(-4deg); opacity:1; } }
+        @keyframes vsPulse { from{ filter:drop-shadow(0 0 10px rgba(240,192,96,0.6)); } to{ filter:drop-shadow(0 0 30px rgba(255,215,0,1)); } }
+        .vs-flash { position:absolute; top:0; bottom:0; left:0; width:22%; background:linear-gradient(90deg,transparent,rgba(255,255,255,0.4),transparent); transform:translateX(-160%) skewX(-20deg); z-index:4; pointer-events:none; animation:vsSweep 0.45s ease-out 0.4s forwards; }
+        @keyframes vsSweep { to{ transform:translateX(560%) skewX(-20deg); } }
+        @keyframes vsShake { 0%,100%{ transform:translate(0,0); } 20%{ transform:translate(-7px,4px); } 40%{ transform:translate(6px,-5px); } 60%{ transform:translate(-5px,2px); } 80%{ transform:translate(4px,-3px); } }
+        #screenVictory { position:fixed; inset:0; width:100vw; height:100vh; height:100dvh; z-index:50; justify-content:center; overflow:hidden; background:radial-gradient(circle at 50% 40%, #2c2c24 0%, #141420 60%, #0d0d1a 100%); }
+        .vic-title { font-size:clamp(40px,12vw,72px); font-weight:900; font-style:italic; background:linear-gradient(180deg,#fff6d8 0%,#f0c060 45%,#c98f1b 100%); -webkit-background-clip:text; background-clip:text; color:transparent; animation:vsSlam 0.45s cubic-bezier(0.2,1.6,0.3,1) both, vsPulse 0.7s ease-in-out 0.5s infinite alternate; }
+        .vic-avatar { font-size:56px; margin:10px 0 6px; padding:16px 26px; background:var(--card-bg); border:3px solid var(--gold); border-radius:20px; animation:vicPop 0.4s cubic-bezier(0.2,1.5,0.4,1) 0.2s both; }
+        @keyframes vicPop { from{ transform:scale(0) rotate(-20deg); } to{ transform:scale(1) rotate(0deg); } }
+        .vic-name { color:#fff; font-weight:900; font-size:18px; margin-bottom:6px; }
+        .confetti { position:absolute; top:-16px; width:8px; height:14px; border-radius:2px; animation:confettiFall linear forwards; }
+        @keyframes confettiFall { to{ transform:translateY(110vh) rotate(720deg); } }
+        @media (max-width:360px) { .game-title { font-size:20px; } .btn { padding:10px 20px; font-size:14px; min-width:100px; } .hud-card { min-width:55px; padding:4px 5px; } .hud-card span { font-size:10px!important; } }
+    </style>
+</head>
+<body>
+<div class="bg-particles" id="bgParticles"></div>
+<div class="game-container" id="gameContainer">
+    <div class="screen active" id="screenMenu">
+        <div class="game-title" data-cls="🃏 卡牌对决">🃏 初13班</div>
+        <div class="game-subtitle">✦ 卡 牌 对 决 ✦</div>
+        <div style="font-size:50px;margin:4px 0;">⚔️</div>
+        <button class="btn" id="btnStartGame" style="font-size:18px;">🎮 开始游戏</button>
+        <button class="btn btn-info btn-sm" id="btnShowRules">📜 游戏规则</button>
+        <button class="btn btn-sm" id="btnSettings">⚙️ 设置</button>
+        <div style="color:#667;font-size:10px;" id="versionLabel">v8.5 · 手动对战</div>
+    </div>
+    <div class="screen" id="screenSettings">
+        <div class="game-title" style="font-size:20px;">⚙️ 设置</div>
+        <div class="set-item" id="btnJoySetting"><span>🕹️ 摇杆设置</span><span class="arr">›</span></div>
+        <div class="set-item" id="btnAbout"><span>ℹ️ 关于</span><span class="arr">›</span></div>
+        <div class="set-item" id="btnDevSetting" style="display:none;"><span>🛠 开发者选项</span><span class="arr">›</span></div>
+        <button class="btn btn-sm" id="btnSettingsBack">⬅ 返回</button>
+    </div>
+    <div class="screen" id="screenDev">
+        <div class="game-title" style="font-size:20px;">🛠 开发者选项</div>
+        <div class="modal-box" style="width:90%;max-width:320px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 2px;">
+                <span style="color:#fff;font-size:13px;font-weight:700;">开启开发者选项</span>
+                <button id="btnDevToggle" class="light-toggle" type="button"><span class="knob"></span></button>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 2px 4px;border-top:1px solid rgba(255,255,255,0.12);margin-top:8px;">
+                <span style="color:#fff;font-size:13px;font-weight:700;">📖 故事模式</span>
+                <button id="btnStoryToggle" class="light-toggle" type="button"><span class="knob"></span></button>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 2px 4px;border-top:1px solid rgba(255,255,255,0.12);margin-top:8px;">
+                <span style="color:#fff;font-size:13px;font-weight:700;">🎬 更多动画</span>
+                <button id="btnAnimToggle" class="light-toggle" type="button"><span class="knob"></span></button>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 2px 4px;border-top:1px solid rgba(255,255,255,0.12);margin-top:8px;">
+                <span style="color:#fff;font-size:13px;font-weight:700;">🕶️ 屏蔽真实名字</span>
+                <button id="btnHideNameToggle" class="light-toggle" type="button"><span class="knob"></span></button>
+            </div>
+        </div>
+        <div class="set-item" id="btnLightSetting" style="display:none;"><span>✨ 沉浸光感 <i class="beta-tag">Beta</i></span><span class="arr">›</span></div>
+        <button class="btn btn-sm" id="btnDevBack">⬅ 返回</button>
+    </div>
+    <div class="screen" id="screenLight">
+        <div class="game-title" style="font-size:20px;">✨ 沉浸光感 <span style="color:#f0a040;font-size:11px;">Beta</span></div>
+        <div class="modal-box" style="width:90%;max-width:320px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 2px;">
+                <span style="color:#fff;font-size:13px;font-weight:700;">开启沉浸光感</span>
+                <button id="btnLightToggle" class="light-toggle" type="button"><span class="knob"></span></button>
+            </div>
+            <div id="lightSegWrap" style="transition:opacity 0.3s;">
+                <div style="display:flex;gap:8px;justify-content:center;margin:12px 0 8px;" id="lightSeg">
+                    <button class="btn btn-sm seg-btn" data-level="strong" style="min-width:64px;">强</button>
+                    <button class="btn btn-sm seg-btn" data-level="gentle" style="min-width:64px;">均衡</button>
+                    <button class="btn btn-sm seg-btn" data-level="smooth" style="min-width:64px;">弱</button>
+                </div>
+            </div>
+        </div>
+        <button class="btn btn-sm" id="btnLightBack">⬅ 返回</button>
+    </div>
+    <div class="screen" id="screenAbout">
+        <div class="game-title" style="font-size:20px;">ℹ️ 关于</div>
+        <div class="modal-box" style="width:90%;max-width:320px;">
+            <h3>📝 本次更新</h3>
+            <div style="color:#ccd;font-size:11px;line-height:1.9;text-align:left;">
+                <div>🕹️ <b>手动对战正式版</b>：模式选择新增手动对战，左下摇杆走位、右下摇杆瞄准松开发射，冷却直接显示在摇杆上；电脑支持键盘（WASD/方向键移动、IJKL瞄准、空格发射）</div>
+                <div>🎛️ <b>摇杆自定义</b>：设置 → 摇杆设置，可自由拖动两个摇杆的位置、滑块调整大小，自动记住</div>
+                <div>😋 <b>新角色·<span data-role="liukun">刘焜</span></b>：干饭人登场！400血初始大体型，每5秒生成5个食物（上限20），吃到食物回血长大，碰撞造成3点伤害</div>
+                <div>🏫 <b>阵营系统</b>：<span data-role="wangyan">王艳</span>、<span data-role="dingxiaohua">丁晓华</span>、<span data-role="renqiuhong">任秋红</span>、<span data-role="zhaolina">赵丽娜</span>为老师阵营，其余为学生阵营，家长只攻击学生</div>
+                <div>✨ 按压动效固定为Q弹果冻手感</div>
+            </div>
+        </div>
+        <div class="modal-box" style="width:90%;max-width:320px;">
+            <h3>📖 玩法说明</h3>
+            <div style="color:#ccd;font-size:11px;line-height:1.9;text-align:left;">
+                <div>• <b>自由模式</b>：自选两名角色 1v1 对决</div>
+                <div>• <b>双人对战</b>：两人各自翻牌抽卡，抽到什么用什么</div>
+                <div>• <b>大乱斗</b>：任意数量角色混战，最后存活的获胜</div>
+                <div>• <b>手动对战</b>：双摇杆亲自操作，手机触屏 / 电脑键盘都能玩，摇杆位置大小可自定义</div>
+                <div>• 每个角色拥有独特技能，战斗中自动释放</div>
+                <div>• 消灭对手全部角色即获得胜利</div>
+            </div>
+        </div>
+        <div class="modal-box" style="width:90%;max-width:320px;">
+            <div style="text-align:center;color:#ccd;font-size:11px;line-height:1.9;">
+                <div style="font-size:15px;font-weight:900;color:var(--gold);" data-cls="卡牌对决">13班卡牌对决</div>
+                <div id="aboutVersion" style="cursor:pointer;">版本 v7.3 · 开发者选项</div>
+                <div id="unlockHint" style="color:#f0a040;font-size:10px;min-height:14px;"></div>
+            </div>
+        </div>
+        <button class="btn btn-sm" id="btnAboutBack">⬅ 返回</button>
+    </div>
+    <div class="screen" id="screenMode">
+        <div class="game-title" style="font-size:20px;">选择模式</div>
+        <button class="btn btn-success" id="btnFreeMode">🆓 自由模式</button>
+        <button class="btn" id="btnDualMode">👥 双人对战</button>
+        <button class="btn btn-warning" id="btnBRMode">🔥 大乱斗</button>
+        <button class="btn btn-info" id="btnManualMode">🕹️ 手动对战</button>
+        <button class="btn" id="btnStoryMode" style="display:none;background:linear-gradient(135deg,#8e6ad8,#5b3fa8);">📖 故事模式</button>
+        <button class="btn btn-sm btn-danger" id="btnBackToMenu">↩ 返回</button>
+    </div>
+    <div class="screen" id="screenJoySettings">
+        <div class="game-title" style="font-size:20px;">🕹️ 摇杆设置</div>
+        <div style="color:#aab;font-size:11px;margin-bottom:8px;">拖动两个圆盘调整位置，下方滑块调整大小（自动保存）</div>
+        <div class="joy-preview" id="joyPreview">
+            <div class="jp-stick jp-move" id="jpMove">移动</div>
+            <div class="jp-stick jp-skill" id="jpSkill">技能</div>
+        </div>
+        <div class="joy-size-row">📏 大小 <input type="range" id="joySizeRange" min="80" max="150" step="2" value="108"> <span id="joySizeVal" style="width:38px;text-align:right;">108</span></div>
+        <button class="btn btn-sm" id="btnJoyReset" style="margin-top:10px;">↺ 恢复默认</button>
+        <button class="btn btn-sm btn-danger" id="btnJoyBack">⬅ 返回</button>
+    </div>
+    <div class="screen" id="screenStory">
+        <div class="story-scroll" id="storyScroll">
+            <div class="story-top">
+                <button class="btn btn-sm btn-danger" id="btnStoryBack" style="padding:6px 12px;">↩</button>
+                <b style="color:var(--gold);font-size:15px;flex:1;text-align:center;padding-right:30px;">📖 故事模式</b>
+            </div>
+            <div class="story-world" id="storyWorld"></div>
+        </div>
+    </div>
+    <div class="screen" id="screenStoryTest">
+        <div class="game-title" style="font-size:20px;">🧪 测试页面</div>
+        <div style="font-size:56px;margin:14px 0;" id="storyTestIcon">🧱</div>
+        <div id="storyTestName" style="color:#fff;font-weight:900;font-size:18px;margin-bottom:6px;">关卡</div>
+        <div style="color:#aab;font-size:12px;background:var(--panel);padding:14px 18px;border-radius:12px;border:1px dashed var(--border);">🚧 此关卡正在建设中…</div>
+        <button class="btn btn-sm btn-danger" id="btnStoryTestBack" style="margin-top:14px;">⬅ 返回地图</button>
+    </div>
+    <div class="screen" id="screenStoryScene">
+        <button class="btn btn-sm btn-danger story-quit" id="btnSceneQuit">↩</button>
+        <div class="scene-stage">
+            <div class="room-floor"></div>
+            <div class="rug"></div>
+            <div class="win-pool"></div>
+            <div class="wall-band"></div>
+            <div class="room-window"></div>
+            <div class="room-door" id="roomDoor">
+                <div class="door-hole"></div>
+                <div class="door-light"></div>
+                <div class="door-panel"><span class="door-knob"></span></div>
+            </div>
+            <div class="bed">
+                <div class="bed-head"></div><div class="bed-mat"></div><div class="bed-pillow"></div><div class="bed-pillow2"></div><div class="bed-blanket"></div>
+            </div>
+            <div class="nightstand"></div>
+            <div class="room-alarm" id="roomAlarm">⏰</div>
+            <div class="desk">
+                <div class="desk-monitor"></div><div class="desk-kb"></div><div class="desk-chair"></div>
+            </div>
+            <div class="slippers">🥿🥿</div>
+            <i class="dust d1"></i><i class="dust d2"></i><i class="dust d3"></i><i class="dust d4"></i>
+            <div class="room-actor" id="actorLz"><span class="ra-emoji" id="emojiLz">😴</span><span class="ra-tag" id="tagLz">李嘉泽</span><div class="zzz"><span>z</span><span>Z</span><span>z</span></div></div>
+            <div class="actor-slot off" id="slotFq"><div class="room-actor" id="actorFq"><span class="ra-emoji" id="emojiFq">👨</span><span class="ra-tag">浮琴</span></div></div>
+            <div class="actor-slot off" id="slotMq"><div class="room-actor" id="actorMq"><span class="ra-emoji">👩</span><span class="ra-tag">木琴</span></div></div>
+        </div>
+        <div class="dlg-box" id="dlgBox">
+            <div class="dlg-speaker" id="dlgSpeaker"><span class="ds-emoji" id="dlgEmoji"></span><b id="dlgName"></b></div>
+            <div class="dlg-text" id="dlgText"></div>
+            <div class="dlg-next" id="dlgNext">点击继续 ▶</div>
+        </div>
+        <div id="blinkOverlay"><div class="lid lid-top"></div><div class="lid lid-bottom"></div></div>
+    </div>
+    <div class="screen" id="screenDuelInvite">
+        <div class="iv-rays"></div>
+        <div class="iv-card">
+            <div class="iv-cross">⚔️</div>
+            <div class="iv-title">决斗邀请</div>
+            <div class="iv-avatar" id="ivAvatar">🤬</div>
+            <div class="iv-line"><b class="iv-from" id="ivFrom">浮琴</b> 向 <b class="iv-to" id="ivTo">你</b> 发起决斗！</div>
+            <div class="iv-sub" id="ivSub">七匹狼 VS Z字弹 · 卧室父子决战</div>
+            <div class="iv-btns">
+                <button class="btn btn-danger iv-btn" id="btnIvRefuse">🏃 拒绝</button>
+                <button class="btn btn-success iv-btn" id="btnIvAccept">⚔️ 接受决斗</button>
+            </div>
+        </div>
+    </div>
+    <div class="screen" id="screenDuelIntro">
+        <div class="di-rays"></div>
+        <div class="di-flash"></div>
+        <div class="di-arena di-shake">
+            <div class="di-card di-left"><div class="di-emoji">🤬</div><div class="di-nm">浮琴</div><div class="di-hp">❤️ 300 · 七匹狼</div></div>
+            <div class="di-vs">VS<div class="di-clash" style="position:absolute;left:50%;top:50%;margin:-35px 0 0 -35px;">💥</div></div>
+            <div class="di-card di-right"><div class="di-emoji">😴</div><div class="di-nm">李嘉泽</div><div class="di-hp">❤️ 300 · Z字弹</div></div>
+        </div>
+        <div class="di-tag">🤬 父 子 の 决 战 🤬</div>
+    </div>
+    <div class="screen" id="screenStoryResult">
+        <div class="sr-rays"></div>
+        <div id="srConfetti" style="position:absolute;inset:0;overflow:hidden;pointer-events:none;"></div>
+        <div class="sr-title" id="srTitle"></div>
+        <div class="sr-face" id="srFace"></div>
+        <div class="sr-stars" id="srStars"></div>
+        <div class="sr-rate" id="srRate"></div>
+        <div class="sr-btns" id="srBtns">
+            <button class="btn btn-success" id="btnSrRetry">🔁 再来一次</button>
+            <button class="btn btn-danger" id="btnSrMap">🗺 返回地图</button>
+        </div>
+    </div>
+    <div class="screen" id="screenManualSelect">
+        <div class="game-title" style="font-size:18px;">🕹️ 手动对战</div>
+        <div id="manualSelectionInfo" style="color:#ccc;font-size:12px;">请选择<b>你的角色</b>和<b>敌方角色</b></div>
+        <div id="manualRoleList" style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;width:100%;"></div>
+        <button class="btn btn-sm btn-danger" id="btnManualReset" style="display:none;">🔄 重新选择</button>
+        <button class="btn btn-sm btn-danger" id="btnManualBack">↩ 返回</button>
+    </div>
+    <div class="screen" id="screenFreeSelect">
+        <div class="game-title" style="font-size:18px;">选择对战双方</div>
+        <div id="freeSelectionInfo" style="color:#ccc;font-size:12px;">请选择<b>玩家1</b>和<b>玩家2</b></div>
+        <div id="freeRoleList" style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;width:100%;"></div>
+        <button class="btn btn-sm btn-danger" id="btnFreeReset" style="display:none;">🔄 重新选择</button>
+        <button class="btn btn-sm btn-danger" id="btnBackToMode">↩ 返回</button>
+    </div>
+    <div class="screen" id="screenBRSelect">
+        <div class="game-title" style="font-size:18px;">🔥 大乱斗 - 选择角色</div>
+        <div id="brSelectionInfo" style="color:#ccc;font-size:12px;">勾选2~5个角色进行混战</div>
+        <div id="brRoleList" style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;width:100%;"></div>
+        <button class="btn btn-warning btn-sm" id="btnStartBR" style="display:none;">⚔️ 开始大乱斗</button>
+        <button class="btn btn-sm btn-danger" id="btnBackToMode3">↩ 返回</button>
+    </div>
+    <div class="screen" id="screenDualDraw">
+        <div class="game-title" style="font-size:16px;">🎴 抽卡决定命运</div>
+        <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;justify-content:center;">
+            <div style="text-align:center;"><div style="color:#7dbfff;font-weight:700;">👤 玩家1（下方）</div><div class="draw-card" id="drawCard1"><div class="card-back">❓</div><div class="card-front"><span class="card-avatar" id="drawAvatar1"></span><span class="card-name" id="drawName1"></span></div></div></div>
+            <div style="font-size:28px;color:var(--gold);">⚡VS⚡</div>
+            <div style="text-align:center;"><div style="color:#ff6b8a;font-weight:700;">👤 玩家2（上方）</div><div class="draw-card" id="drawCard2"><div class="card-back">❓</div><div class="card-front"><span class="card-avatar" id="drawAvatar2"></span><span class="card-name" id="drawName2"></span></div></div></div>
+        </div>
+        <button class="btn btn-success" id="btnStartDualBattle" style="display:none;">⚔️ 开始对决</button>
+        <button class="btn btn-sm btn-danger" id="btnBackToMode2">↩ 返回</button>
+    </div>
+    <div class="screen" id="screenVS">
+        <div class="vs-rays"></div>
+        <div class="vs-flash"></div>
+        <div class="vs-arena" id="vsArena">
+            <div id="vsCardMulti" style="position:absolute;inset:0;pointer-events:none;display:none;"></div>
+            <div class="vs-card vs-card-left" id="vsCard1"><span class="vs-avatar" id="vsAvatar1"></span><div class="vs-name" id="vsName1"></div><div class="vs-hp" id="vsHp1"></div></div>
+            <div class="vs-logo" id="vsLogoWord">VS</div>
+            <div class="vs-card vs-card-right" id="vsCard2"><span class="vs-avatar" id="vsAvatar2"></span><div class="vs-name" id="vsName2"></div><div class="vs-hp" id="vsHp2"></div></div>
+        </div>
+        <div style="color:#778;font-size:12px;letter-spacing:4px;padding-bottom:24px;">⚔️ 巅 峰 对 决 ⚔️</div>
+    </div>
+    <div class="screen" id="screenVictory">
+        <div class="vs-rays"></div>
+        <div id="vicConfetti" style="position:absolute;inset:0;overflow:hidden;pointer-events:none;"></div>
+        <div class="vic-title">🏆 VICTORY 🏆</div>
+        <div class="vic-avatar" id="vicAvatar"></div>
+        <div class="vic-name" id="vicName"></div>
+        <div style="display:flex;gap:10px;">
+            <button class="btn btn-success" id="btnVictoryRematch">🔁 再战一局</button>
+            <button class="btn btn-danger" id="btnVictoryBack">🏠 返回菜单</button>
+        </div>
+    </div>
+    <div class="screen" id="screenBattle">
+        <div class="battle-hud" id="battleHud"></div>
+        <div class="battle-arena-wrapper"><canvas class="battle-canvas" id="battleCanvas"></canvas></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;">
+            <button class="btn btn-sm btn-danger" id="btnEndBattle">🏳️ 结束</button>
+            <button class="btn btn-sm" id="btnRematch" style="display:none;">🔄 再来</button>
+        </div>
+        <div id="battleResult" style="text-align:center;font-weight:700;font-size:16px;color:var(--gold);min-height:24px;"></div>
+        <div id="kbHint" style="display:none;text-align:center;font-size:11px;color:#9ab;background:rgba(255,255,255,0.06);border-radius:8px;padding:4px 8px;">⌨️ WASD/方向键移动 · 🖱️ 鼠标瞄准 · 左键/空格发射</div>
+        <div class="joy-wrap" id="joyMoveWrap">
+            <div class="joy-base" id="joyMove"><div class="joy-label">🕹️ 移动</div><div class="joy-knob"></div></div>
+        </div>
+        <div class="joy-wrap" id="joySkillWrap">
+            <div class="joy-base" id="joySkill"><div class="joy-cd" id="joyCd"></div><div class="joy-label">⚡ 技能</div><div class="joy-knob"></div></div>
+        </div>
+    </div>
+    <div class="modal-overlay" id="modalPwd">
+        <div class="modal-box" style="width:84%;max-width:300px;">
+            <h3>🔐 身份验证</h3>
+            <div style="color:#aab;font-size:11px;text-align:center;">请输入访问密码</div>
+            <input type="password" class="pwd-input" id="pwdInput" autocomplete="off" placeholder="输入密码">
+            <div class="pwd-err" id="pwdErr"></div>
+            <div style="display:flex;gap:8px;">
+                <button class="btn btn-sm btn-danger" id="btnPwdCancel" style="flex:1;">取消</button>
+                <button class="btn btn-sm btn-success" id="btnPwdOk" style="flex:1;">确定</button>
+            </div>
+        </div>
+    </div>
+    <div id="authOkOverlay">
+        <div class="auth-sweep"></div>
+        <div class="auth-ring-box">
+            <svg class="auth-ring" viewBox="0 0 108 108"><circle cx="54" cy="54" r="48"></circle></svg>
+            <div class="auth-check">✓</div>
+        </div>
+        <div class="auth-text">身份验证已通过</div>
+        <div class="auth-sub">ACCESS GRANTED</div>
+    </div>
+    <div class="modal-overlay" id="modalRules">
+        <div class="modal-box">
+            <h3>📜 游戏规则</h3>
+            <ul>
+                <li><b>自由模式：</b>手动选两个角色对战，自动弹跳，碰边反弹。</li>
+                <li><b>双人对战：</b>双方抽卡，玩家1下方，玩家2上方。</li>
+                <li><b>大乱斗：</b>自选2-5个角色混战，存活到最后获胜！</li>
+                <li><b>🕹️ 手动对战：</b>选自己和敌方的角色，由你亲自操作！左下摇杆控制走位，右下摇杆朝推动方向<b>松开</b>发射技能（冷却显示在摇杆上）；电脑自动隐藏摇杆，用 WASD/方向键移动、鼠标瞄准、左键或空格发射（冷却显示在角色脚下的环上）。触屏设备可在「设置→摇杆设置」里自定义摇杆位置和大小。</li>
+                <li><b><span data-role="wangyan">王艳</span>👩‍🏫：</b>弯折腿🦵，冷却3秒，反弹3次，伤害30；副技能📱叫家长：每30秒拿出手机召唤2名家长👨👩（烟雾降临，随机位置），家长随机弹跳，碰到学生撞上扣10血，不会伤到<span data-role="wangyan">王艳</span>。</li>
+                <li><b><span data-role="lijiaze">李嘉泽</span>😴：</b>打鼾Z💤，冷却4秒，3个Z各15伤害。</li>
+                <li><b><span data-role="lichenyu">李晨雨</span>👧：</b>声波🌊，冷却5.5秒，伤害38。</li>
+                <li><b><span data-role="zhuhaoyu">朱皓宇</span>👦：</b>豪车🚗/金表⌚，冷却4.5秒，随机28或20伤害。</li>
+                <li><b><span data-role="dingxiaohua">丁晓华</span>👩‍💻：</b>电脑💻，冷却7秒，时停3秒每秒18血。</li>
+                <li><b><span data-role="renqiuhong">任秋红</span>👩‍🏫：</b>召唤皇帝👑，冷却10秒，上限5个，皇帝近战伤15/血30，50%闪避投射物。</li>
+                <li><b><span data-role="chengxinxin">程梓鑫</span>🧑‍🍳：</b>牛肉饼🍔，冷却5秒，反弹5次消失，敌伤15，自回30。</li>
+                <li><b><span data-role="zhaolina">赵丽娜</span>👩‍🏫：</b>菠菜叶🥬，每秒发射，伤害5，死亡后满血复活一次。</li>
+                <li><b><span data-role="liuyiming">刘一鸣</span>🧑‍🎓：</b>鸡米花🍿，冷却3秒，伤害15，开局1秒后分身出<span data-role="liuerming">刘二鸣</span>、<span data-role="liusanming">刘三鸣</span>（各150血）。</li>
+                <li><b><span data-role="liukun">刘焜</span>😋：</b>干饭人，400血初始大体型；场上每5秒生成5个食物🍔（最多共存20个），吃到食物回血2并长大；普通碰撞扣10血；<b>每10秒自动冲锋</b>锁定最近的敌人高速撞过去，撞上扣30血。</li>
+                <li><b>阵营：</b><span data-role="wangyan">王艳</span>、<span data-role="dingxiaohua">丁晓华</span>、<span data-role="renqiuhong">任秋红</span>、<span data-role="zhaolina">赵丽娜</span>为👩‍🏫老师阵营，其余角色为🧑‍🎓学生阵营；<span data-role="wangyan">王艳</span>召唤的家长只攻击学生。</li>
+            </ul>
+            <button class="btn btn-sm" id="btnCloseRules" style="width:100%;margin-top:8px;">✅ 我知道了</button>
+        </div>
+    </div>
+</div>
+<script>
+    (function() {
+        // ============ 音效 ============
+        let audioCtx=null;
+        function initAudio(){ if(!audioCtx) try{audioCtx=new(window.AudioContext||window.webkitAudioContext)();}catch(e){audioCtx=null;} if(audioCtx&&audioCtx.state==='suspended') audioCtx.resume(); }
+        function playSound(freq,type,duration,vol=0.12,glide=null){ if(!audioCtx) return; try{ const t=audioCtx.currentTime; const o=audioCtx.createOscillator(); const g=audioCtx.createGain(); o.type=type; o.frequency.setValueAtTime(freq,t); if(glide) o.frequency.linearRampToValueAtTime(glide,t+duration); g.gain.setValueAtTime(vol,t); g.gain.exponentialRampToValueAtTime(0.001,t+duration); o.connect(g); g.connect(audioCtx.destination); o.start(t); o.stop(t+duration); }catch(e){} }
+        function sfxShoot(){ playSound(300,'square',0.12,0.06,600); }
+        function sfxHit(){ playSound(60,'sawtooth',0.18,0.08); }
+        function sfxHeal(){ playSound(500,'sine',0.12,0.1,700); }
+        function sfxDodge(){ playSound(600,'sine',0.1,0.1,800); }
+        function sfxDraw(){ playSound(500,'square',0.1,0.06,900); }
+        function sfxWin(){ playSound(400,'square',0.12,0.08,800); setTimeout(()=>playSound(500,'square',0.12,0.08,1000),100); }
+        function sfxBounce(){ playSound(200,'triangle',0.05,0.03,350); }
+        function sfxClick(){ playSound(800,'sine',0.04,0.02); }
+        function sfxSonic(){ playSound(150,'sine',0.18,0.2,80); }
+        function sfxFreeze(){ playSound(80,'sawtooth',0.2,0.15); }
+        function sfxSummon(){ playSound(500,'sine',0.15,0.15,700); }
+        function sfxRevive(){ playSound(400,'sine',0.2,0.3,600); }
+        function sfxSlam(){ playSound(150,'triangle',0.12,0.3,60); }
+        function sfxPhone(){ playSound(1150,'square',0.08,0.12,1500); setTimeout(()=>playSound(1150,'square',0.08,0.12,1500),110); setTimeout(()=>playSound(1450,'square',0.1,0.12,1900),220); }
+        function sfxSmoke(){ playSound(70,'sawtooth',0.3,0.25,140); }
+
+        // ============ 角色数据 ============
+        const ROLES = [
+            { id:'wangyan', name:'王艳', avatar:'👩‍🏫', hp:300, color:'#ff6b8a', skillInterval:3000, skillType:'bouncing_leg', skillDamage:30, bounceLimit:3, secondType:'call_parents', secondInterval:30000, projectileColor:'#ffaa80', projectileSize:18, projectileSpeed:3.5, moveSpeed:1.2, size:32, desc:'弯折腿🦵3秒 叫家长👨' },
+            { id:'lijiaze', name:'李嘉泽', avatar:'😴', hp:300, color:'#7dbfff', skillInterval:4000, skillType:'triple_z', skillDamage:15, bounceLimit:1, projectileColor:'#c8e0ff', projectileSize:14, projectileSpeed:3.2, moveSpeed:1.15, size:30, desc:'打鼾Z💤4秒 3发各15' },
+            { id:'lichenyu', name:'李晨雨', avatar:'👧', hp:300, color:'#a679ff', skillInterval:5500, skillType:'sonic_wave', skillDamage:38, bounceLimit:0, projectileColor:'#ffffff', projectileSize:22, projectileSpeed:4.0, moveSpeed:1.1, size:32, desc:'声波〰️5.5秒 伤38' },
+            { id:'zhuhaoyu', name:'朱皓宇', avatar:'👦', hp:300, color:'#f0c060', skillInterval:4500, skillType:'random_luxury', skillDamage:0, bounceLimit:0, projectileColor:'#ffd700', projectileSize:20, projectileSpeed:3.6, moveSpeed:1.1, size:30, desc:'随机🚗28/⌚20' },
+            { id:'dingxiaohua', name:'丁晓华', avatar:'👩‍💻', hp:300, color:'#66ccff', skillInterval:7000, skillType:'freeze_computer', skillDamage:30, bounceLimit:0, projectileColor:'#00aaff', projectileSize:24, projectileSpeed:3.4, moveSpeed:1.15, size:32, desc:'电脑💻7秒 时停3秒' },
+            { id:'renqiuhong', name:'任秋红', avatar:'👩‍🏫', hp:300, color:'#ff99cc', skillInterval:10000, skillType:'spawn_emperor', skillDamage:0, bounceLimit:0, projectileColor:'#ffd700', projectileSize:0, projectileSpeed:0, moveSpeed:1.0, size:30, desc:'召唤皇帝👑10秒 上限5' },
+            { id:'chengxinxin', name:'程梓鑫', avatar:'🧑‍🍳', hp:300, color:'#f5a623', skillInterval:5000, skillType:'beef_cake', skillDamage:15, bounceLimit:5, projectileColor:'#d2691e', projectileSize:20, projectileSpeed:3.0, moveSpeed:1.1, size:30, desc:'牛肉饼🍔5秒 弹5次' },
+            { id:'zhaolina', name:'赵丽娜', avatar:'👩‍🏫', hp:300, color:'#90ee90', skillInterval:1000, skillType:'spinach', skillDamage:5, bounceLimit:0, projectileColor:'#228b22', projectileSize:16, projectileSpeed:3.0, moveSpeed:1.0, size:30, desc:'菠菜🥬每秒1发 可复活', hasRevive: true },
+            { id:'liuyiming', name:'刘一鸣', avatar:'🧑‍🎓', hp:300, color:'#ffb347', skillInterval:3000, skillType:'popcorn_chicken', skillDamage:15, bounceLimit:0, projectileColor:'#ff8c00', projectileSize:14, projectileSpeed:3.2, moveSpeed:1.1, size:30, desc:'鸡米花🍿3秒 伤15 分身', hasSpawn: true,
+              spawnRoles: [
+                  { id:'liuerming', name:'刘二鸣', avatar:'🧑‍🎓', hp:150, color:'#ffb347', skillInterval:3000, skillType:'popcorn_chicken', skillDamage:15, bounceLimit:0, projectileColor:'#ff8c00', projectileSize:14, projectileSpeed:3.2, moveSpeed:1.1, size:28, desc:'鸡米花🍿3秒 伤15' },
+                  { id:'liusanming', name:'刘三鸣', avatar:'🧑‍🎓', hp:150, color:'#ffb347', skillInterval:3000, skillType:'popcorn_chicken', skillDamage:15, bounceLimit:0, projectileColor:'#ff8c00', projectileSize:14, projectileSpeed:3.2, moveSpeed:1.1, size:28, desc:'鸡米花🍿3秒 伤15' }
+              ]
+            },
+            { id:'liukun', name:'刘焜', avatar:'😋', hp:400, color:'#ff8c5a', skillInterval:9999999, skillType:'melee', skillDamage:10, bounceLimit:0, projectileColor:'#ff8c5a', projectileSize:0, projectileSpeed:0, moveSpeed:1.0, size:40, desc:'干饭😋吃食物长大 碰10伤 10秒冲锋30伤' }
+        ];
+
+        const EMPEROR_ROLE = { id:'emperor', name:'皇帝', avatar:'👑', hp:30, color:'#ffd700', skillInterval:9999999, skillType:'melee', skillDamage:15, projectileColor:'#ffd700', projectileSize:0, projectileSpeed:0, moveSpeed:1.8, size:22, desc:'近战碰撞伤害15' };
+        const PARENT_ROLES = [
+            { id:'dad', name:'家长', avatar:'👨', hp:100, color:'#9a8a6a', skillInterval:9999999, skillType:'melee', skillDamage:10, projectileColor:'#ffffff', projectileSize:0, projectileSpeed:0, moveSpeed:1.1, size:30, desc:'家长随机弹跳，碰撞学生扣10' },
+            { id:'mom', name:'家长', avatar:'👩', hp:100, color:'#b08a6a', skillInterval:9999999, skillType:'melee', skillDamage:10, projectileColor:'#ffffff', projectileSize:0, projectileSpeed:0, moveSpeed:1.1, size:30, desc:'家长随机弹跳，碰撞学生扣10' }
+        ];
+        // ============ 阵营（老师 / 学生，家长只攻击学生） ============
+        const TEACHER_IDS=['wangyan','dingxiaohua','renqiuhong','zhaolina','emperor','dad','mom'];
+        ROLES.forEach(r=>{ r.faction=TEACHER_IDS.includes(r.id)?'teacher':'student'; (r.spawnRoles||[]).forEach(s=>s.faction='student'); });
+        EMPEROR_ROLE.faction='teacher'; PARENT_ROLES.forEach(r=>r.faction='teacher');
+
+        // ============ 故事模式角色：浮琴（父亲·七匹狼） ============
+        const FUQIN_ROLE={ id:'fuqin', name:'浮琴', avatar:'🤬', hp:300, color:'#e74c3c', skillInterval:3000, skillType:'belt', skillDamage:30, bounceLimit:0, projectileColor:'#8a5326', projectileSize:17, projectileSpeed:2.8, moveSpeed:1.15, size:30, desc:'七匹狼皮带', faction:'story' };
+
+        // ============ 屏蔽真实名字（开发者选项）：角色代号 ============
+        const ROLE_ALIASES={ wangyan:'飞腿教官', lijiaze:'呼噜睡侠', lichenyu:'音波使', zhuhaoyu:'豪掷公子', dingxiaohua:'时停程序员', renqiuhong:'唤灵导师', chengxinxin:'弹弹肉饼', zhaolina:'绿叶射手', liuyiming:'米花本尊', liuerming:'米花分身·贰', liusanming:'米花分身·叁', liukun:'干饭狂战' };
+        let hideNames=false;
+        function rn(role){ return role && hideNames && ROLE_ALIASES[role.id] ? ROLE_ALIASES[role.id] : (role?role.name:''); }
+        function syncHiddenNames(){
+            document.querySelectorAll('[data-role]').forEach(el=>{
+                const id=el.dataset.role;
+                if(!el.dataset.real) el.dataset.real=el.textContent;
+                el.textContent=(hideNames&&ROLE_ALIASES[id])?ROLE_ALIASES[id]:el.dataset.real;
+            });
+            document.querySelectorAll('[data-cls]').forEach(el=>{
+                if(!el.dataset.real) el.dataset.real=el.textContent;
+                el.textContent=hideNames?el.dataset.cls:el.dataset.real;
+            });
+        }
+
+        // ============ 全局状态 ============
+        let gameMode=null, battleActive=false, animationId=null;
+        let canvas, ctx, arenaSize=320, entities=[], projectiles=[], particles=[], smokes=[], foods=[], foodTimer=0;
+        let isManualBattle=false, manualEnt=null, manualMyRole=null, manualEnemyRole=null, manualLaunched=false;
+        const joyMove={x:0,y:0,active:false}, joySkill={x:0,y:0,active:false};
+        let player1Role=null, player2Role=null, drawnCards={1:false,2:false};
+        let freeSelected={p1:null,p2:null};
+        let brSelectedRoles=[];
+        let hudSignature='', uidCounter=0, drawSession=0;
+
+        // ============ 界面导航 ============
+        function showScreen(s){
+            ['screenMenu','screenMode','screenManualSelect','screenFreeSelect','screenDualDraw','screenVS','screenBattle','screenBRSelect','screenVictory','screenSettings','screenDev','screenLight','screenAbout','screenJoySettings','screenStory','screenStoryTest','screenStoryScene','screenDuelInvite','screenDuelIntro','screenStoryResult'].forEach(id=>{
+                const el=document.getElementById(id); if(el) el.classList.remove('active');
+            });
+            if(s) s.classList.add('active');
+            initAudio();
+        }
+        function goToMenu(){ stopBattle(); showScreen(document.getElementById('screenMenu')); }
+        function goToModeSelect(){ stopBattle(); resetDrawState(); showScreen(document.getElementById('screenMode')); }
+
+        // ============ 状态重置 ============
+        function resetDrawState(){
+            drawSession++; // 使未完成的抽卡回调失效，防止竞态写入
+            drawnCards={1:false,2:false};
+            const dc1=document.getElementById('drawCard1'), dc2=document.getElementById('drawCard2');
+            if(dc1) dc1.classList.remove('revealed','flipping');
+            if(dc2) dc2.classList.remove('revealed','flipping');
+            ['drawAvatar1','drawName1','drawAvatar2','drawName2'].forEach(id=>{ const el=document.getElementById(id); if(el) el.textContent=''; });
+            const btn=document.getElementById('btnStartDualBattle'); if(btn) btn.style.display='none';
+            player1Role=null; player2Role=null;
+        }
+
+        // ============ 模式选择（共用卡片构建） ============
+        function buildRoleCards(listEl, onPick){
+            if(!listEl) return;
+            listEl.innerHTML='';
+            ROLES.forEach(role=>{
+                const card=document.createElement('div');
+                card.className='card-display'; card.style.cssText='cursor:pointer;width:104px;flex:none;';
+                card.dataset.roleId=role.id;
+                card.innerHTML=`<span class="card-avatar">${role.avatar}</span><div class="card-name">${rn(role)}</div><div class="card-hp">❤️ ${role.hp}</div><div class="card-skill-info" style="height:34px;overflow:hidden;">${role.desc}</div>`;
+                card.style.animationDelay=(ROLES.indexOf(role)*0.04)+'s';
+                card.classList.add('card-in');
+                card.addEventListener('click',()=>onPick(card,role));
+                listEl.appendChild(card);
+            });
+        }
+
+        // ============ 自由模式 ============
+        function updateFreeSelection(){
+            const cards = document.querySelectorAll('#freeRoleList .card-display');
+            cards.forEach(card=>{
+                card.classList.remove('selected');
+                if(freeSelected.p1 && freeSelected.p1.id===card.dataset.roleId) card.classList.add('selected');
+                if(freeSelected.p2 && freeSelected.p2.id===card.dataset.roleId) card.classList.add('selected');
+            });
+            if(freeSelected.p1 && freeSelected.p2){
+                player1Role=freeSelected.p1; player2Role=freeSelected.p2;
+                gameMode='free'; showVSIntro([player1Role, player2Role], ()=>initBattle([player1Role, player2Role]));
+            }
+            const resetBtn=document.getElementById('btnFreeReset');
+            if(resetBtn) resetBtn.style.display = (freeSelected.p1||freeSelected.p2)?'inline-block':'none';
+            const info=document.getElementById('freeSelectionInfo');
+            if(info) info.textContent = freeSelected.p1 ? (freeSelected.p2?'✅ 开始！':'请选择玩家2') : '请选择玩家1';
+        }
+        function startFreeMode(){
+            freeSelected={p1:null,p2:null};
+            buildRoleCards(document.getElementById('freeRoleList'),(card,role)=>{
+                sfxClick();
+                if(!freeSelected.p1) freeSelected.p1=role;
+                else if(!freeSelected.p2 && role.id!==freeSelected.p1.id) freeSelected.p2=role;
+                updateFreeSelection();
+            });
+            updateFreeSelection();
+            showScreen(document.getElementById('screenFreeSelect'));
+        }
+
+        // ============ 故事模式（3D 蜿蜒节点地图，空壳） ============
+        const STORY_ICONS=['🏠','🧱','⭐','🎯','🔥','💠','🧩','☄️','🌀','👾','🏯','🏆'];
+        const STORY_TOP=96, STORY_GAP=132;
+        function buildStoryMap(){
+            const world=document.getElementById('storyWorld');
+            const scroll=document.getElementById('storyScroll');
+            world.innerHTML=''; scroll.scrollTop=0;
+            const w=world.clientWidth||360, N=STORY_ICONS.length;
+            const H=STORY_TOP+(N-1)*STORY_GAP+110;
+            world.style.height=H+'px';
+            const pts=[];
+            for(let i=0;i<N;i++){ pts.push({ x:w/2+Math.sin(i*0.85)*(w*0.30), y:STORY_TOP+i*STORY_GAP }); }
+            let d='M'+pts[0].x+' '+pts[0].y;
+            for(let i=0;i<pts.length-1;i++){
+                const p0=pts[i-1]||pts[i], p1=pts[i], p2=pts[i+1], p3=pts[i+2]||pts[i+1];
+                d+=' C'+(p1.x+(p2.x-p0.x)/6).toFixed(1)+' '+(p1.y+(p2.y-p0.y)/6).toFixed(1)+' '+(p2.x-(p3.x-p1.x)/6).toFixed(1)+' '+(p2.y-(p3.y-p1.y)/6).toFixed(1)+' '+p2.x.toFixed(1)+' '+p2.y.toFixed(1);
+            }
+            const NS='http://www.w3.org/2000/svg';
+            const svg=document.createElementNS(NS,'svg');
+            svg.setAttribute('class','story-path-svg'); svg.setAttribute('width',w); svg.setAttribute('height',H);
+            [[22,'rgba(38,42,70,0.95)',''],[3,'rgba(240,192,96,0.28)','']].forEach(([sw,stroke])=>{
+                const path=document.createElementNS(NS,'path');
+                path.setAttribute('d',d); path.setAttribute('fill','none');
+                path.setAttribute('stroke',stroke); path.setAttribute('stroke-width',''+sw);
+                path.setAttribute('stroke-linecap','round'); path.setAttribute('stroke-linejoin','round');
+                svg.appendChild(path);
+            });
+            world.appendChild(svg);
+            [['🌲',12,150],['☁️',82,300],['🌲',8,560],['⭐',88,680],['🌲',86,900],['☁️',10,1080]].forEach(([ic,x,y],i)=>{
+                const dec=document.createElement('div'); dec.className='story-deco'; dec.textContent=ic;
+                dec.style.left=x+'%'; dec.style.top=y+'px'; dec.style.animationDelay=(i*0.6)+'s';
+                world.appendChild(dec);
+            });
+            pts.forEach((p,i)=>{
+                const b=document.createElement('button');
+                if(i===0){ b.className='story-node house'; }
+                else b.className='story-node cube'+(i%2?' alt':'');
+                b.innerHTML='<span class="sn-face">'+STORY_ICONS[i]+'</span>';
+                b.style.left=p.x+'px'; b.style.top=p.y+'px';
+                b.style.animationDelay=(i*0.07)+'s';
+                b.addEventListener('click',()=>openStoryTest(i));
+                world.appendChild(b);
+            });
+        }
+        function openStoryTest(i){
+            sfxClick();
+            if(i===0){ startPrologue(); return; }
+            document.getElementById('storyTestIcon').textContent=STORY_ICONS[i];
+            document.getElementById('storyTestName').textContent='第 '+i+' 关 · 测试页面';
+            showScreen(document.getElementById('screenStoryTest'));
+        }
+
+        // ============ 故事模式·序章（卧室剧情 + 父子决斗） ============
+        const PROLOG=[
+            { w:'nar', t:'因李嘉泽昨天晚上堵了一晚上的桥……' },
+            { blink:'alarm' },
+            { enter:true },
+            { w:'fq', e:'😠', t:'李嘉泽，快起床😠！' },
+            { w:'lz', e:'🥱', t:'知道了🥱……' },
+            { blink:'close' },
+            { w:'nar', t:'过了 10 分钟……' },
+            { blink:'open' },
+            { w:'fq', e:'😡', t:'你为什么还不起来😡！' },
+            { w:'lz', e:'🥱', t:'知道了马上🥱！' },
+            { w:'fq', e:'🤬', t:'🤬🤬🤬' },
+            { duel:true }
+        ];
+        const STAR_INFO=[ ['😵','挑战失败'],['😫','勉强通关'],['🙁','艰难通关'],['😐','普通通关'],['🙂','顺利通关'],['😀','完美通关'] ];
+        let proIdx=0, proBusy=false, proTypeTimer=0, proTimers=[], scoldStars=-1;
+        function storyLzName(){ const r=ROLES.find(x=>x.id==='lijiaze'); return r?rn(r):'李嘉泽'; }
+        function storyMask(t){ return t.split('李嘉泽').join(storyLzName()); }
+        function psetTimeout(fn,ms){ const id=setTimeout(()=>{ proTimers=proTimers.filter(x=>x!==id); fn(); },ms); proTimers.push(id); return id; }
+        function clearProTimers(){ proTimers.forEach(clearTimeout); proTimers=[]; clearInterval(proTypeTimer); proTypeTimer=0; }
+        const blinkOverlay=document.getElementById('blinkOverlay');
+        function sfxBlip(){ playSound(480+Math.random()*160,'square',0.03,0.045); }
+        function sfxWhoosh(down){ playSound(down?620:120,'sine',0.22,0.22,down?120:620); }
+        function sfxAlarm(){ for(let i=0;i<8;i++){ setTimeout(()=>playSound(i%2?1180:940,'square',0.09,0.22),i*130); } }
+        function sfxDoorOpen(){ playSound(520,'square',0.05,0.07); playSound(210,'sawtooth',0.5,0.09,72); [0,230,470,690].forEach(d=>psetTimeout(()=>playSound(74+Math.random()*18,'sine',0.1,0.12),d)); }
+        function setSpeaker(who){
+            document.querySelectorAll('.room-actor').forEach(a=>a.classList.remove('speaking'));
+            if(who==='fq'||who==='lz') document.getElementById(who==='fq'?'actorFq':'actorLz').classList.add('speaking');
+        }
+        function typeLine(text, who, emoji, done){
+            const dlg=document.getElementById('dlgText'), sp=document.getElementById('dlgSpeaker'), next=document.getElementById('dlgNext');
+            next.style.visibility='hidden';
+            if(who==='nar'){ sp.style.visibility='hidden'; dlg.classList.add('nar'); }
+            else { sp.style.visibility='visible'; dlg.classList.remove('nar'); document.getElementById('dlgEmoji').textContent=emoji||''; document.getElementById('dlgName').textContent=who==='fq'?'浮琴':storyLzName(); }
+            text=storyMask(text);
+            dlg.textContent=''; let i=0;
+            clearInterval(proTypeTimer);
+            proTypeTimer=setInterval(()=>{
+                i++; dlg.textContent=text.slice(0,i);
+                if(i%2===0) sfxBlip();
+                if(i>=text.length){ clearInterval(proTypeTimer); proTypeTimer=0; next.style.visibility='visible'; done&&done(true); }
+            },46);
+            proTypeFill=()=>{ clearInterval(proTypeTimer); proTypeTimer=0; dlg.textContent=text; next.style.visibility='visible'; done&&done(false); };
+        }
+        let proTypeFill=null;
+        function startPrologue(){
+            clearProTimers(); proBusy=false; proIdx=0; scoldStars=-1;
+            document.getElementById('emojiLz').textContent='😴';
+            document.getElementById('emojiFq').textContent='👨';
+            document.getElementById('tagLz').textContent=storyLzName();
+            document.querySelectorAll('.room-actor').forEach(a=>a.classList.remove('speaking'));
+            document.getElementById('actorLz').classList.add('sleeping');
+            document.getElementById('roomDoor').classList.remove('open');
+            document.getElementById('slotFq').classList.add('off');
+            document.getElementById('slotMq').classList.add('off');
+            document.getElementById('roomAlarm').classList.remove('ring');
+            blinkOverlay.classList.remove('blink-close','blink-open','blink-alarm');
+            document.getElementById('screenStoryScene').classList.remove('over-lid');
+            showScreen(document.getElementById('screenStoryScene'));
+            psetTimeout(runProStep,250);
+        }
+        function runProStep(){
+            if(proIdx>=PROLOG.length) return;
+            const st=PROLOG[proIdx];
+            if(st.blink){
+                proBusy=true; setSpeaker(null);
+                blinkOverlay.classList.remove('blink-close','blink-open','blink-alarm');
+                void blinkOverlay.offsetWidth;
+                if(st.blink==='close'){
+                    blinkOverlay.classList.add('blink-close'); document.getElementById('screenStoryScene').classList.add('over-lid'); sfxWhoosh(true);
+                    psetTimeout(()=>{ proBusy=false; proIdx++; runProStep(); },190);
+                }
+                else if(st.blink==='open'){
+                    blinkOverlay.classList.add('blink-open'); document.getElementById('screenStoryScene').classList.remove('over-lid'); sfxWhoosh();
+                    psetTimeout(()=>{ blinkOverlay.classList.remove('blink-close','blink-open'); proBusy=false; proIdx++; runProStep(); },350);
+                }
+                else {
+                    blinkOverlay.classList.add('blink-alarm'); sfxWhoosh(true);
+                    document.getElementById('roomAlarm').classList.add('ring');
+                    psetTimeout(()=>sfxAlarm(),560);
+                    psetTimeout(()=>{ blinkOverlay.classList.remove('blink-alarm'); document.getElementById('roomAlarm').classList.remove('ring'); proBusy=false; proIdx++; runProStep(); },1080);
+                }
+                return;
+            }
+            if(st.enter){
+                proBusy=true; setSpeaker(null);
+                document.getElementById('roomDoor').classList.add('open');
+                sfxDoorOpen();
+                psetTimeout(()=>{ document.getElementById('slotFq').classList.remove('off'); },560);
+                psetTimeout(()=>{ document.getElementById('slotMq').classList.remove('off'); },820);
+                psetTimeout(()=>{ proBusy=false; proIdx++; runProStep(); },1750);
+                return;
+            }
+            if(st.duel){ showDuelChoice(); return; }
+            proBusy=true;
+            setSpeaker(st.w);
+            if(st.w==='lz'){ document.getElementById('actorLz').classList.remove('sleeping'); document.getElementById('emojiLz').textContent=st.e||'🥱'; }
+            if(st.w==='fq') document.getElementById('emojiFq').textContent=st.e||'👨';
+            if(st.w==='nar') playSound(300,'sine',0.08,0.12);
+            typeLine(st.t, st.w, st.e, ()=>{ proBusy=false; });
+        }
+        function onDlgTap(){
+            if(scoldStars>=0){
+                if(proTypeTimer&&proTypeFill){ if(proTypeFill) proTypeFill(); proBusy=false; return; }
+                const s=scoldStars; scoldStars=-1; showStoryResult(s); return;
+            }
+            if(proBusy){
+                if(proTypeTimer&&proTypeFill){ proBusy=false; proTypeFill(); }
+                return;
+            }
+            const st=PROLOG[proIdx];
+            if(st&&st.duel) return;
+            proIdx++; runProStep();
+        }
+        function showDuelChoice(){
+            proBusy=true; setSpeaker('fq');
+            document.getElementById('emojiFq').textContent='🤬';
+            typeLine('李嘉泽！我要和你决斗！🤬','fq','🤬',()=>{
+                proBusy=false;
+                document.getElementById('dlgNext').style.visibility='hidden';
+                showDuelInvite();
+            });
+        }
+        function showDuelInvite(){
+            document.getElementById('ivTo').textContent=storyLzName();
+            showScreen(document.getElementById('screenDuelInvite'));
+            playSound(150,'sawtooth',0.35,0.16,70);
+            psetTimeout(()=>playSound(920,'square',0.12,0.09,1500),130);
+            psetTimeout(()=>playSound(1260,'square',0.18,0.08,760),270);
+        }
+        function fqScoldThen(stars){
+            clearProTimers();
+            blinkOverlay.classList.remove('blink-close','blink-open','blink-alarm');
+            document.getElementById('screenStoryScene').classList.remove('over-lid');
+            document.querySelectorAll('.room-actor').forEach(a=>a.classList.remove('speaking'));
+            showScreen(document.getElementById('screenStoryScene'));
+            psetTimeout(()=>{
+                setSpeaker('fq'); document.getElementById('emojiFq').textContent='🤬';
+                typeLine('赶紧给我去学校🤬🤬🤬','fq','🤬',()=>{ proBusy=false; scoldStars=stars; });
+            },200);
+        }
+
+        // ============ 父子决斗（手动） ============
+        function startStoryDuel(){
+            clearProTimers();
+            gameMode='storyduel';
+            const lz=ROLES.find(x=>x.id==='lijiaze');
+            showStoryDuelIntro(()=>initBattle([lz,FUQIN_ROLE]));
+        }
+        function showStoryDuelIntro(cb){
+            const s=document.getElementById('screenDuelIntro');
+            s.classList.remove('go');
+            showScreen(s); void s.offsetWidth;
+            psetTimeout(()=>s.classList.add('go'),30);
+            sfxWhoosh();
+            psetTimeout(()=>playSound(160,'square',0.18,0.4,60),280);
+            psetTimeout(()=>{ playSound(1200,'square',0.12,0.3,200); playSound(70,'sawtooth',0.25,0.3); },450);
+            psetTimeout(cb,1650);
+        }
+        function storyDuelEnd(win, ratio){
+            stopBattle();
+            // 赢：按自己剩余血量定星；输：也算通关，按父亲剩余血量定星（父亲血越少=打得越惨烈=星越高）
+            const stars=win?(ratio>=0.75?5:ratio>=0.5?4:ratio>=0.25?3:2):(ratio<=0.25?3:ratio<=0.55?2:1);
+            psetTimeout(()=>showStoryResult(stars),200);
+        }
+
+        // ============ 星级结算 ============
+        let srStars=0;
+        function showStoryResult(stars){
+            srStars=stars;
+            const scr=document.getElementById('screenStoryResult'), title=document.getElementById('srTitle'), face=document.getElementById('srFace'), rate=document.getElementById('srRate'), box=document.getElementById('srStars'), btns=document.getElementById('srBtns'), cf=document.getElementById('srConfetti');
+            scr.classList.remove('fail','shake'); title.classList.remove('in'); face.classList.remove('in'); btns.classList.remove('show'); rate.textContent=''; cf.innerHTML='';
+            box.innerHTML=''; for(let i=0;i<5;i++){ const sp=document.createElement('span'); sp.className='sr-star'; sp.textContent='★'; box.appendChild(sp); }
+            const fail=stars===0;
+            if(fail) scr.classList.add('fail');
+            title.textContent=stars===0?'挑战失败':'通 关';
+            face.textContent=STAR_INFO[stars][0];
+            showScreen(scr);
+            if(fail){ playSound(200,'sawtooth',0.5,0.3,70); psetTimeout(()=>scr.classList.add('shake'),200); }
+            else sfxWin();
+            psetTimeout(()=>face.classList.add('in'),250);
+            psetTimeout(()=>title.classList.add('in'),500);
+            const lit=[];
+            for(let i=0;i<stars;i++){ psetTimeout(()=>{ lit[i]=box.children[i]; if(lit[i]) lit[i].classList.add('lit'); playSound(523+i*130,'triangle',0.16,0.3); if(i===stars-1) playSound(1046,'triangle',0.3,0.32); },820+i*330); }
+            psetTimeout(()=>{
+                rate.textContent=STAR_INFO[stars][1];
+                btns.classList.add('show');
+                if(!fail){
+                    const colors=['#f0c060','#ff6b8a','#66ccff','#90ee90','#c8a0ff'];
+                    const n=stars>=4?22:14;
+                    for(let i=0;i<n;i++){ const c=document.createElement('span'); c.className='confetti'; c.style.left=(Math.random()*100)+'%'; c.style.background=colors[i%colors.length]; c.style.animationDelay=(Math.random()*0.8)+'s'; c.style.animationDuration=(1.6+Math.random()*1.4)+'s'; cf.appendChild(c); }
+                }
+            },820+stars*330+450);
+        }
+
+        // ============ 手动对战 ============
+        function startManualMode(){
+            manualMyRole=null; manualEnemyRole=null; manualLaunched=false;
+            buildRoleCards(document.getElementById('manualRoleList'),(card,role)=>{
+                sfxClick();
+                if(!manualMyRole) manualMyRole=role;
+                else if(!manualEnemyRole && role.id!==manualMyRole.id) manualEnemyRole=role;
+                updateManualSelection();
+            });
+            updateManualSelection();
+            showScreen(document.getElementById('screenManualSelect'));
+        }
+        function updateManualSelection(){
+            document.querySelectorAll('#manualRoleList .card-display').forEach(c=>{
+                c.classList.toggle('selected',(manualMyRole&&manualMyRole.id===c.dataset.roleId)||(manualEnemyRole&&manualEnemyRole.id===c.dataset.roleId));
+            });
+            const info=document.getElementById('manualSelectionInfo');
+            if(info) info.innerHTML = manualMyRole ? (manualEnemyRole ? '✅ <b>'+rn(manualMyRole)+'</b> VS <b>'+rn(manualEnemyRole)+'</b> 准备战斗！' : '已选 <b>'+rn(manualMyRole)+'</b>，请选择<b>敌方角色</b>') : '请选择<b>你的角色</b>（左下摇杆移动，右下摇杆放技能）';
+            const resetBtn=document.getElementById('btnManualReset'); if(resetBtn) resetBtn.style.display=(manualMyRole||manualEnemyRole)?'inline-block':'none';
+            if(manualMyRole&&manualEnemyRole&&!manualLaunched){
+                manualLaunched=true;
+                gameMode='manual';
+                showVSIntro([manualMyRole,manualEnemyRole],()=>initBattle([manualMyRole,manualEnemyRole]));
+            }
+        }
+
+        // ============ 双人对战 ============
+        function startDualMode(){ gameMode='dual'; resetDrawState(); showScreen(document.getElementById('screenDualDraw')); }
+        function drawCard(num){
+            initAudio(); if(drawnCards[num]) return; drawnCards[num]=true; sfxDraw();
+            const session=drawSession; // 记录会话，期间重置则丢弃过期结果
+            const cardEl=document.getElementById(num===1?'drawCard1':'drawCard2');
+            const avatarEl=document.getElementById(num===1?'drawAvatar1':'drawAvatar2');
+            const nameEl=document.getElementById(num===1?'drawName1':'drawName2');
+            const role=ROLES[Math.floor(Math.random()*ROLES.length)];
+            if(avatarEl) avatarEl.textContent=role.avatar; // 提前填充内容，翻过90°后正面才可见
+            if(nameEl) nameEl.textContent=rn(role);
+            if(cardEl) cardEl.classList.add('flipping');
+            setTimeout(()=>{
+                if(session!==drawSession) return;
+                if(cardEl){ cardEl.classList.remove('flipping'); cardEl.classList.add('revealed'); sfxSlam(); }
+                if(num===1) player1Role=role; else player2Role=role;
+                if(drawnCards[1]&&drawnCards[2]){ const btn=document.getElementById('btnStartDualBattle'); if(btn) btn.style.display='inline-block'; }
+            },700);
+        }
+        function startDualBattle(){ if(!player1Role||!player2Role) return; gameMode='dual'; showVSIntro([player1Role, player2Role], ()=>initBattle([player1Role, player2Role])); }
+
+        // ============ 大乱斗 ============
+        function updateBRSelection(){
+            const cards = document.querySelectorAll('#brRoleList .card-display');
+            brSelectedRoles = [];
+            cards.forEach(card=>{
+                if(card.classList.contains('selected')){
+                    const roleId = card.dataset.roleId;
+                    const role = ROLES.find(r=>r.id===roleId);
+                    if(role) brSelectedRoles.push(role);
+                }
+            });
+            const btn=document.getElementById('btnStartBR');
+            const info=document.getElementById('brSelectionInfo');
+            if(btn) btn.style.display = (brSelectedRoles.length>=2) ? 'inline-block' : 'none';
+            if(info) info.textContent = `已选 ${brSelectedRoles.length} 个角色 (最少2个)`;
+        }
+        function startBRMode(){
+            brSelectedRoles=[];
+            buildRoleCards(document.getElementById('brRoleList'),(card)=>{
+                sfxClick();
+                card.classList.toggle('selected');
+                updateBRSelection();
+            });
+            updateBRSelection();
+            showScreen(document.getElementById('screenBRSelect'));
+        }
+        function startBRBattle(){
+            if(brSelectedRoles.length<2) return;
+            gameMode='br';
+            showVSIntro([...brSelectedRoles], ()=>initBattle([...brSelectedRoles]));
+        }
+
+        // ============ VS开场动画 ============
+        let vsTimer=null;
+        function sfxVS(){ playSound(110,'sawtooth',0.3,0.4,45); playSound(500,'square',0.35,0.18,1400); }
+        function showVSIntro(roles, onDone){
+            showScreen(document.getElementById('screenVS'));
+            const c1=document.getElementById('vsCard1'), c2=document.getElementById('vsCard2'), multi=document.getElementById('vsCardMulti'), word=document.getElementById('vsLogoWord');
+            multi.innerHTML=''; word.textContent='VS'; word.classList.remove('small3');
+            c1.style.display=''; c2.style.display=''; multi.style.display='none';
+            if(roles.length===2){
+                [[roles[0],'vsAvatar1','vsName1','vsHp1',c1],[roles[1],'vsAvatar2','vsName2','vsHp2',c2]].forEach(([role,aid,nid,hid,card])=>{
+                    const a=document.getElementById(aid), n=document.getElementById(nid), h=document.getElementById(hid);
+                    if(a) a.textContent=role.avatar;
+                    if(n) n.textContent=rn(role);
+                    if(h) h.textContent='❤️ '+role.hp;
+                    if(card){ card.style.borderColor=role.color; card.style.boxShadow='0 0 28px '+role.color+'66'; }
+                });
+            }else{
+                c1.style.display='none'; c2.style.display='none'; multi.style.display='block';
+                word.textContent='大乱斗'; word.classList.add('small3');
+                const N=roles.length, maxW=Math.min(window.innerWidth*0.86,400), half=Math.sin(Math.PI/N);
+                let cw=N<=4?120:N<=6?96:80;
+                const need=cw/(2*half)+cw/2;
+                if(need*2>maxW) cw=Math.max(56,cw*(maxW/2)/need);
+                const R=cw/(2*half);
+                roles.forEach((r,i)=>{
+                    const th=-Math.PI/2+i*(Math.PI*2/N);
+                    const d=document.createElement('div');
+                    d.className='vs-card mini';
+                    d.style.cssText='width:'+cw+'px;height:'+cw+'px;margin-left:'+(-cw/2)+'px;margin-top:'+(-cw/2)+'px;left:calc(50% + '+(Math.cos(th)*R).toFixed(1)+'px);top:calc(50% + '+(Math.sin(th)*R).toFixed(1)+'px);border-color:'+r.color+';box-shadow:0 0 20px '+r.color+'66;--fx:'+(Math.cos(th)*R*2.6).toFixed(1)+'px;--fy:'+(Math.sin(th)*R*2.6).toFixed(1)+'px;animation-delay:'+(i*0.05).toFixed(2)+'s';
+                    d.innerHTML='<span class="vs-avatar" style="font-size:'+Math.round(cw*0.4)+'px">'+r.avatar+'</span><div class="vs-name" style="font-size:10px">'+rn(r)+'</div>';
+                    multi.appendChild(d);
+                });
+            }
+            sfxVS();
+            if(vsTimer) clearTimeout(vsTimer);
+            vsTimer=setTimeout(()=>{ vsTimer=null; onDone(); },1500);
+        }
+
+        // ============ 实体创建 ============
+        function createEntity(role, owner, index, total, isSummoned=false){
+            const margin=role.size+15;
+            let x,y,vx,vy;
+            if(gameMode==='dual' && !isSummoned){
+                if(owner==='player1'){ x=arenaSize/2; y=arenaSize-margin; vx=(Math.random()-0.5)*role.moveSpeed*2; vy=-role.moveSpeed*0.8; }
+                else { x=arenaSize/2; y=margin; vx=(Math.random()-0.5)*role.moveSpeed*2; vy=role.moveSpeed*0.8; }
+            }else{
+                const angle=(index/total)*Math.PI*2 + Math.random()*0.5;
+                const dist=arenaSize*0.3;
+                x=arenaSize/2 + Math.cos(angle)*dist;
+                y=arenaSize/2 + Math.sin(angle)*dist;
+                vx=(Math.random()-0.5)*role.moveSpeed*2;
+                vy=(Math.random()-0.5)*role.moveSpeed*2;
+            }
+            return {role, owner, x, y, vx, vy, hp:role.hp, maxHp:role.hp, size:role.size,
+                lastSkillTime:performance.now()-Math.random()*role.skillInterval,
+                flashTimer:0, frozenUntil:0, lastFrozenTick:0,
+                isEmperor: role.id==='emperor', summoner: null, frozenLabelEl: null,
+                isParent:false, mother:null, parentAtkUntil:0,
+                liukunAtkUntil:0,
+                chargeTimer:(role.id==='liukun'?performance.now()+10000:0),
+                charging:null,
+                lastSecondTime:performance.now()+8000,
+                revived: false, invincibleUntil: 0, spawnTimer: 0,
+                uid: ++uidCounter, hudFillEl: null, hudTextEl: null, isManual:false };
+        }
+
+        // ============ 战斗初始化 ============
+        function initBattle(roleList){
+            stopBattle(); initAudio(); battleActive=true; projectiles=[]; particles=[]; smokes=[]; foods=[]; foodTimer=performance.now()+5000; hudSignature='';
+            arenaSize=Math.floor(Math.min(window.innerWidth*0.9,380));
+            canvas=document.getElementById('battleCanvas'); canvas.width=arenaSize; canvas.height=arenaSize; ctx=canvas.getContext('2d');
+            entities=[];
+            roleList.forEach((role,i)=>{
+                const owner = gameMode==='dual' ? (i===0?'player1':'player2') : ('p'+i);
+                const ent = createEntity(role, owner, i, roleList.length);
+                if(role.hasSpawn) ent.spawnTimer = performance.now() + 1000;
+                entities.push(ent);
+            });
+            isManualBattle=(gameMode==='manual'||gameMode==='storyduel'); manualEnt=null;
+            if(isManualBattle && entities[0]){
+                manualEnt=entities[0]; manualEnt.isManual=true;
+                manualEnt.lastSkillTime=performance.now()-manualEnt.role.skillInterval;
+                manualEnt.vx=0; manualEnt.vy=0;
+            }
+            const pcMode=isManualBattle&&IS_PC;
+            const jmw=document.getElementById('joyMoveWrap'), jsw=document.getElementById('joySkillWrap'), kh=document.getElementById('kbHint');
+            applyJoyLayout();
+            if(jmw) jmw.style.display=pcMode?'none':(isManualBattle?'block':'none');
+            if(jsw) jsw.style.display=pcMode?'none':(isManualBattle?'block':'none');
+            if(kh) kh.style.display=pcMode?'block':'none';
+            if(canvas) canvas.style.cursor=pcMode?'crosshair':'';
+            resetJoysticks();
+            updateHUD();
+            showScreen(document.getElementById('screenBattle'));
+            const resultEl=document.getElementById('battleResult'); if(resultEl) resultEl.textContent='';
+            const endBtn=document.getElementById('btnEndBattle'); if(endBtn) endBtn.style.display='inline-block';
+            const rematchBtn=document.getElementById('btnRematch'); if(rematchBtn) rematchBtn.style.display='none';
+            document.querySelectorAll('.damage-pop,.heal-pop,.dodge-pop,.frozen-fixed,.revive-pop,.phone-pop').forEach(e=>e.remove());
+            animationId=requestAnimationFrame(gameLoop);
+        }
+
+        // ============ HUD（增量更新：实体增减才重建，血条走CSS过渡） ============
+        function updateHUD(){
+            const hud=document.getElementById('battleHud'); if(!hud) return;
+            const alive=entities.filter(e=>e.hp>0);
+            const sig=alive.map(e=>e.uid).join(',');
+            if(sig!==hudSignature){
+                hudSignature=sig;
+                let html='';
+                alive.forEach(ent=>{
+                    const label=ent.isEmperor?'👑皇帝':(gameMode==='storyduel'?(ent.isManual?'你':'敌方'):(ent.owner==='player1'?'玩家1':(ent.owner==='player2'?'玩家2':'P'+(parseInt(ent.owner.slice(1),10)+1))));
+                    const hpP=Math.max(0,(ent.hp/ent.maxHp)*100);
+                    const danger=hpP<30?' danger':'';
+                    html+=`<div class="hud-card"><span style="font-size:16px;">${ent.role.avatar}</span> <b style="color:#fff;font-size:11px;">${rn(ent.role)}</b> <span style="color:#888;font-size:9px;">[${label}]</span><div class="hud-hp-bar"><div class="hud-hp-fill${danger}" style="width:${hpP}%;"></div></div><span style="font-size:9px;color:#f99;">${Math.ceil(Math.max(0,ent.hp))}/${ent.maxHp}</span></div>`;
+                });
+                hud.innerHTML=html;
+                const cards=hud.querySelectorAll('.hud-card');
+                alive.forEach((ent,i)=>{ ent.hudFillEl=cards[i]?cards[i].querySelector('.hud-hp-fill'):null; ent.hudTextEl=cards[i]?cards[i].lastElementChild:null; });
+            }
+            alive.forEach(ent=>{
+                const hpP=Math.max(0,(ent.hp/ent.maxHp)*100);
+                if(ent.hudFillEl){ ent.hudFillEl.style.width=hpP+'%'; ent.hudFillEl.classList.toggle('danger',hpP<30); }
+                if(ent.hudTextEl) ent.hudTextEl.textContent=Math.ceil(Math.max(0,ent.hp))+'/'+ent.maxHp;
+            });
+        }
+
+        // ============ 战斗辅助 ============
+        function findNearestEnemy(ent){
+            let nearest=null, minDist=Infinity;
+            entities.forEach(e=>{
+                if(e===ent || e.hp<=0 || e.owner===ent.owner) return;
+                const dx=e.x-ent.x, dy=e.y-ent.y;
+                const dist=Math.sqrt(dx*dx+dy*dy);
+                if(dist<minDist){ minDist=dist; nearest=e; }
+            });
+            return nearest;
+        }
+
+        // ============ 技能释放 ============
+        function fireSkill(ent, aimAngle){
+            if(ent.role.skillType==='spawn_emperor'){
+                if(ent.role.id!=='renqiuhong') return;
+                const currentEmperors = entities.filter(e => e.isEmperor && e.owner === ent.owner && e.hp > 0);
+                if(currentEmperors.length >= 5) return;
+                sfxSummon();
+                const emperor = createEntity(EMPEROR_ROLE, ent.owner, 0, 1, true);
+                emperor.x = ent.x + (Math.random()-0.5)*30;
+                emperor.y = ent.y + (Math.random()-0.5)*30;
+                emperor.vx = (Math.random()-0.5)*2;
+                emperor.vy = (Math.random()-0.5)*2;
+                emperor.summoner = ent;
+                entities.push(emperor);
+                return;
+            }
+            if(ent.role.skillType==='spinach'){
+                let a;
+                if(aimAngle!==undefined) a=aimAngle;
+                else { const target=findNearestEnemy(ent); if(!target) return; a=Math.atan2(target.y-ent.y,target.x-ent.x); }
+                sfxShoot();
+                projectiles.push({x:ent.x,y:ent.y,vx:Math.cos(a)*ent.role.projectileSpeed,vy:Math.sin(a)*ent.role.projectileSpeed,size:ent.role.projectileSize,damage:ent.role.skillDamage,owner:ent.owner,bounces:0,bounceLimit:0,color:ent.role.projectileColor,type:'spinach',born:performance.now(),shooter:ent});
+                return;
+            }
+            if(ent.role.skillType==='belt'){
+                let ab;
+                if(aimAngle!==undefined) ab=aimAngle;
+                else { const tg=findNearestEnemy(ent); if(!tg) return; ab=Math.atan2(tg.y-ent.y,tg.x-ent.x); }
+                playSound(820,'sawtooth',0.1,0.28,110);
+                setTimeout(()=>playSound(2200,'square',0.04,0.16),55);
+                projectiles.push({x:ent.x,y:ent.y,vx:Math.cos(ab)*ent.role.projectileSpeed,vy:Math.sin(ab)*ent.role.projectileSpeed,size:ent.role.projectileSize,damage:ent.role.skillDamage,owner:ent.owner,bounces:0,bounceLimit:0,color:ent.role.projectileColor,type:'belt',born:performance.now(),shooter:ent});
+                return;
+            }
+            const r=ent.role;
+            let a;
+            if(aimAngle!==undefined){ a=aimAngle; }
+            else { const target=findNearestEnemy(ent); if(!target) return; a=Math.atan2(target.y-ent.y,target.x-ent.x); }
+            if(r.skillType==='bouncing_leg'){
+                sfxShoot();
+                projectiles.push({x:ent.x,y:ent.y,vx:Math.cos(a)*r.projectileSpeed,vy:Math.sin(a)*r.projectileSpeed,size:r.projectileSize,damage:r.skillDamage,owner:ent.owner,bounces:0,bounceLimit:r.bounceLimit,color:r.projectileColor,type:'leg',born:performance.now(),shooter:ent});
+            }else if(r.skillType==='triple_z'){
+                sfxShoot(); const base=a; const spd = aimAngle!==undefined?1.0:(0.9+Math.random()*0.3);
+                for(let i=0;i<3;i++){ const aa=base+(i-1)*0.35; projectiles.push({x:ent.x,y:ent.y,vx:Math.cos(aa)*r.projectileSpeed*spd,vy:Math.sin(aa)*r.projectileSpeed*spd,size:r.projectileSize,damage:r.skillDamage,owner:ent.owner,bounces:0,bounceLimit:r.bounceLimit,color:r.projectileColor,type:'z',born:performance.now(),shooter:ent}); }
+            }else if(r.skillType==='sonic_wave'){
+                sfxSonic();
+                projectiles.push({x:ent.x,y:ent.y,vx:Math.cos(a)*r.projectileSpeed,vy:Math.sin(a)*r.projectileSpeed,size:r.projectileSize,damage:r.skillDamage,owner:ent.owner,bounces:0,bounceLimit:0,color:r.projectileColor,type:'sonic',born:performance.now(),shooter:ent});
+            }else if(r.skillType==='random_luxury'){
+                sfxShoot(); const isCar=Math.random()<0.5; const dmg=isCar?28:20; const emoji=isCar?'🚗':'⌚';
+                projectiles.push({x:ent.x,y:ent.y,vx:Math.cos(a)*r.projectileSpeed,vy:Math.sin(a)*r.projectileSpeed,size:r.projectileSize,damage:dmg,owner:ent.owner,bounces:0,bounceLimit:0,color:'#ffd700',type:'luxury',emoji:emoji,born:performance.now(),shooter:ent});
+            }else if(r.skillType==='freeze_computer'){
+                sfxFreeze();
+                projectiles.push({x:ent.x,y:ent.y,vx:Math.cos(a)*r.projectileSpeed,vy:Math.sin(a)*r.projectileSpeed,size:r.projectileSize,damage:0,owner:ent.owner,bounces:0,bounceLimit:0,color:r.projectileColor,type:'computer',born:performance.now(),shooter:ent});
+            }else if(r.skillType==='beef_cake'){
+                sfxShoot();
+                const offset = ent.size/2 + r.projectileSize/2 + 5;
+                const startX = ent.x + Math.cos(a) * offset;
+                const startY = ent.y + Math.sin(a) * offset;
+                projectiles.push({
+                    x:startX, y:startY,
+                    vx:Math.cos(a)*r.projectileSpeed,
+                    vy:Math.sin(a)*r.projectileSpeed,
+                    size:r.projectileSize, damage:r.skillDamage,
+                    owner:ent.owner, bounces:0, bounceLimit:r.bounceLimit,
+                    color:r.projectileColor, type:'beef',
+                    born:performance.now(), shooter:ent,
+                    hitCooldowns: new Map(), healedSelf: false
+                });
+            }else if(r.skillType==='popcorn_chicken'){
+                sfxShoot();
+                projectiles.push({x:ent.x,y:ent.y,vx:Math.cos(a)*r.projectileSpeed,vy:Math.sin(a)*r.projectileSpeed,size:r.projectileSize,damage:r.skillDamage,owner:ent.owner,bounces:0,bounceLimit:0,color:r.projectileColor,type:'popcorn',born:performance.now(),shooter:ent});
+            }
+        }
+
+        // ============ 副技能（王艳：叫家长） ============
+        function spawnSmoke(x,y){ const puffs=[]; for(let i=0;i<6;i++){ const a=Math.random()*Math.PI*2, d=Math.random()*10; puffs.push({dx:Math.cos(a)*d,dy:Math.sin(a)*d,r:9+Math.random()*10}); } smokes.push({x,y,born:performance.now(),puffs}); }
+        function fireSecondSkill(ent){
+            if(ent.role.secondType==='call_parents'){
+                const aliveParents=entities.filter(e=>e.isParent&&e.hp>0);
+                if(aliveParents.length>=4) return;
+                sfxPhone();
+                spawnFloatPop(ent.x,ent.y-24,'📱','phone-pop'); // 掏出手机
+                const count=Math.min(2,4-aliveParents.length);
+                const spots=[];
+                for(let i=0;i<count;i++){
+                    const sp={x:30+Math.random()*(arenaSize-60), y:30+Math.random()*(arenaSize-60), pr:PARENT_ROLES[(aliveParents.length+i)%2]};
+                    spots.push(sp); spawnSmoke(sp.x,sp.y); // 烟雾先在家长位置凝聚
+                }
+                setTimeout(()=>{
+                    if(!battleActive) return;
+                    spots.forEach(sp=>{
+                        const p=createEntity(sp.pr,ent.owner,0,1,true);
+                        p.x=sp.x; p.y=sp.y;
+                        p.vx=(Math.random()-0.5)*2; p.vy=(Math.random()-0.5)*2;
+                        p.isParent=true; p.mother=ent;
+                        entities.push(p);
+                    });
+                    sfxSmoke(); // 0.35秒后烟雾散开，家长现身
+                },350);
+            }
+        }
+
+        // ============ 粒子与浮动文字 ============
+        function spawnParticles(x,y,color,n){ for(let i=0;i<n;i++){ const a=Math.random()*Math.PI*2; particles.push({x,y,vx:Math.cos(a)*(1+Math.random()*3),vy:Math.sin(a)*(1+Math.random()*3),life:200+Math.random()*300,color,size:2+Math.random()*4}); } }
+        function spawnFloatPop(x,y,text,className){
+            const pop=document.createElement('div'); pop.className=className; pop.textContent=text;
+            const rect=canvas.getBoundingClientRect(); pop.style.left=(rect.left+x/(arenaSize/rect.width)-18)+'px'; pop.style.top=(rect.top+y/(arenaSize/rect.height)-12)+'px'; pop.style.position='fixed';
+            document.body.appendChild(pop); setTimeout(()=>pop.remove(),1000);
+        }
+        function spawnDamagePop(x,y,dmg){ spawnFloatPop(x,y,'-'+dmg,'damage-pop'); }
+        function spawnHealPop(x,y,val){ spawnFloatPop(x,y,'+'+val,'heal-pop'); }
+        function spawnDodgePop(x,y){ spawnFloatPop(x,y,'💨闪避','dodge-pop'); }
+        function spawnRevivePop(x,y){ spawnFloatPop(x,y,'✨复活','revive-pop'); }
+
+        // ============ 逻辑更新 ============
+        function update(ts){
+            const m=15;
+            // 分身逻辑
+            for(let i=entities.length-1; i>=0; i--){
+                const e = entities[i];
+                if(e.role.hasSpawn && e.spawnTimer && ts >= e.spawnTimer && e.hp > 0){
+                    e.spawnTimer = 0; // 防止重复
+                    const spawnRoles = e.role.spawnRoles;
+                    if(spawnRoles){
+                        spawnRoles.forEach(sr => {
+                            const child = createEntity(sr, e.owner, 0, 1, true);
+                            child.x = e.x + (Math.random()-0.5)*40;
+                            child.y = e.y + (Math.random()-0.5)*40;
+                            child.vx = (Math.random()-0.5)*2;
+                            child.vy = (Math.random()-0.5)*2;
+                            entities.push(child);
+                        });
+                    }
+                }
+            }
+            // 皇帝死亡处理
+            for (let i = entities.length-1; i >= 0; i--) {
+                const e = entities[i];
+                if (e.isEmperor && e.summoner) {
+                    if (!entities.includes(e.summoner) || e.summoner.hp <= 0) e.hp = 0;
+                }
+            }
+            entities.forEach(e=>{
+                if(e.hp<=0) return;
+                const frozen = ts < e.frozenUntil;
+                if(!frozen){
+                    if(e.frozenLabelEl){
+                        e.frozenLabelEl.classList.remove('frozen-visible');
+                        const el = e.frozenLabelEl;
+                        setTimeout(()=>{ if(el.parentNode) el.remove(); }, 300);
+                        e.frozenLabelEl = null;
+                    }
+                    if(e.isManual && !(e.role.id==='liukun' && e.charging)){ e.vx=joyMove.x*2.6; e.vy=joyMove.y*2.6; }
+                    e.x+=e.vx; e.y+=e.vy; let b=false;
+                    if(e.role.id==='liukun'){
+                        if(e.charging && (e.charging.hp<=0 || !entities.includes(e.charging))) e.charging=null;
+                        if(!e.charging && ts>=e.chargeTimer){
+                            const tgt=findNearestEnemy(e);
+                            e.chargeTimer=ts+10000;
+                            if(tgt){ e.charging=tgt; spawnFloatPop(e.x,e.y-24,'💢','dodge-pop'); playSound(180,'sawtooth',0.2,0.12,90); }
+                        }
+                        if(e.charging){
+                            const t=e.charging, cdx=t.x-e.x, cdy=t.y-e.y, cd=Math.sqrt(cdx*cdx+cdy*cdy)||1;
+                            if(cd<(e.size+t.size)/2+2){
+                                t.hp-=30; t.flashTimer=150; sfxHit(); spawnDamagePop(t.x,t.y,30); spawnParticles(t.x,t.y,'#ff4444',10);
+                                e.charging=null; e.liukunAtkUntil=ts+1000;
+                                e.vx=-cdx/cd*2; e.vy=-cdy/cd*2;
+                            }else{ e.vx=cdx/cd*3.6; e.vy=cdy/cd*3.6; }
+                        }
+                    }
+                    if(e.x-e.size/2<m){ e.x=m+e.size/2; if(e.isManual&&!e.charging)e.vx=0; else{ e.vx=Math.abs(e.vx); b=true; } }
+                    if(e.x+e.size/2>arenaSize-m){ e.x=arenaSize-m-e.size/2; if(e.isManual&&!e.charging)e.vx=0; else{ e.vx=-Math.abs(e.vx); b=true; } }
+                    if(e.y-e.size/2<m){ e.y=m+e.size/2; if(e.isManual&&!e.charging)e.vy=0; else{ e.vy=Math.abs(e.vy); b=true; } }
+                    if(e.y+e.size/2>arenaSize-m){ e.y=arenaSize-m-e.size/2; if(e.isManual&&!e.charging)e.vy=0; else{ e.vy=-Math.abs(e.vy); b=true; } }
+                    if(b) sfxBounce();
+                }
+                if(e.flashTimer>0) e.flashTimer-=16;
+                if(frozen){
+                    if(!e.frozenLabelEl){
+                        const el = document.createElement('div');
+                        el.className = 'frozen-fixed';
+                        el.textContent = '⏳ 时停';
+                        document.body.appendChild(el);
+                        requestAnimationFrame(()=>{ el.classList.add('frozen-visible'); });
+                        e.frozenLabelEl = el;
+                    }
+                    const rect = canvas.getBoundingClientRect();
+                    const scaleX = arenaSize / rect.width;
+                    const scaleY = arenaSize / rect.height;
+                    const screenX = rect.left + (e.x / scaleX);
+                    const screenY = rect.top + (e.y / scaleY) - e.size/2 - 20;
+                    if(e.frozenLabelEl){
+                        e.frozenLabelEl.style.left = screenX + 'px';
+                        e.frozenLabelEl.style.top = screenY + 'px';
+                    }
+                    if(!e.lastFrozenTick) e.lastFrozenTick=ts;
+                    if(ts-e.lastFrozenTick>=1000){
+                        e.lastFrozenTick=ts; e.hp-=18; sfxHit();
+                        spawnDamagePop(e.x,e.y,18);
+                        if(e.hp<=0) e.hp=0;
+                    }
+                }else{
+                    e.lastFrozenTick=0;
+                    if(ts-e.lastSkillTime>=e.role.skillInterval && !e.isEmperor && !e.isManual){
+                        e.lastSkillTime=ts;
+                        fireSkill(e);
+                    }
+                    if(e.role.secondType && ts-e.lastSecondTime>=e.role.secondInterval){
+                        e.lastSecondTime=ts;
+                        fireSecondSkill(e);
+                    }
+                }
+            });
+            if(isManualBattle && manualEnt && manualEnt.hp>0){
+                updateSkillCooldown(ts);
+            }
+            for(let i=0;i<entities.length;i++){
+                const a=entities[i]; if(a.hp<=0) continue;
+                for(let j=i+1;j<entities.length;j++){
+                    const b=entities[j]; if(b.hp<=0 || a.owner===b.owner) continue;
+                    const dx=b.x-a.x, dy=b.y-a.y, dist=Math.sqrt(dx*dx+dy*dy), min=(a.size+b.size)/2;
+                    if(dist<=0.01){ b.x+=(Math.random()-0.5)*2; b.y+=(Math.random()-0.5)*2; continue; } // 完全重合时微扰分离，防止卡死
+                    if(dist<min && !(ts<a.frozenUntil||ts<b.frozenUntil)){
+                        if(a.isEmperor && !b.isEmperor && ts>=b.invincibleUntil){ b.hp -= 15; b.flashTimer=150; sfxHit(); spawnDamagePop(b.x,b.y,15); }
+                        if(b.isEmperor && !a.isEmperor && ts>=a.invincibleUntil){ a.hp -= 15; a.flashTimer=150; sfxHit(); spawnDamagePop(a.x,a.y,15); }
+                        if(a.isParent && b.role.faction==='student' && ts>=a.parentAtkUntil){ a.parentAtkUntil=ts+800; b.hp-=10; b.flashTimer=150; sfxHit(); spawnDamagePop(b.x,b.y,10); }
+                        if(b.isParent && a.role.faction==='student' && ts>=b.parentAtkUntil){ b.parentAtkUntil=ts+800; a.hp-=10; a.flashTimer=150; sfxHit(); spawnDamagePop(a.x,a.y,10); }
+                        if(a.role.id==='liukun' && !a.charging && ts>=a.liukunAtkUntil){ a.liukunAtkUntil=ts+800; b.hp-=10; b.flashTimer=150; sfxHit(); spawnDamagePop(b.x,b.y,10); }
+                        if(b.role.id==='liukun' && !b.charging && ts>=b.liukunAtkUntil){ b.liukunAtkUntil=ts+800; a.hp-=10; a.flashTimer=150; sfxHit(); spawnDamagePop(a.x,a.y,10); }
+                        const nx=dx/dist, ny=dy/dist, over=min-dist;
+                        if(a.role.id==='liukun'&&a.charging){ b.x+=nx*over; b.y+=ny*over; b.vx+=nx*2.5; b.vy+=ny*2.5; }
+                        else if(b.role.id==='liukun'&&b.charging){ a.x-=nx*over; a.y-=ny*over; a.vx-=nx*2.5; a.vy-=ny*2.5; }
+                        else{
+                            a.x-=nx*over/2; a.y-=ny*over/2;
+                            b.x+=nx*over/2; b.y+=ny*over/2;
+                            const rv=(a.vx-b.vx)*nx+(a.vy-b.vy)*ny;
+                            if(rv>0){ a.vx-=rv*nx; a.vy-=rv*ny; b.vx+=rv*nx; b.vy+=rv*ny; }
+                        }
+                        sfxBounce();
+                    }
+                }
+            }
+            for(let i=projectiles.length-1;i>=0;i--){
+                const p=projectiles[i]; p.x+=p.vx; p.y+=p.vy; let edge=false;
+                if(p.x-p.size/2<0){ p.x=p.size/2; p.vx=Math.abs(p.vx); edge=true; }
+                if(p.x+p.size/2>arenaSize){ p.x=arenaSize-p.size/2; p.vx=-Math.abs(p.vx); edge=true; }
+                if(p.y-p.size/2<0){ p.y=p.size/2; p.vy=Math.abs(p.vy); edge=true; }
+                if(p.y+p.size/2>arenaSize){ p.y=arenaSize-p.size/2; p.vy=-Math.abs(p.vy); edge=true; }
+                if(edge){
+                    if(p.bounceLimit>0 && p.bounces<p.bounceLimit){ p.bounces++; sfxBounce(); }
+                    else { spawnParticles(p.x,p.y,p.color,3); projectiles.splice(i,1); continue; }
+                }
+                const now = performance.now();
+                let shouldRemove = false;
+                for(const tgt of entities){
+                    if(tgt.hp<=0) continue;
+                    if(now < tgt.invincibleUntil && tgt.role.hasRevive) continue;
+                    const dx=p.x-tgt.x, dy=p.y-tgt.y, dist=Math.sqrt(dx*dx+dy*dy);
+                    if(dist<(p.size+tgt.size)/2){
+                        if(p.type==='beef'){
+                            if(tgt === p.shooter && now - p.born < 100) continue;
+                            if(tgt === p.shooter){
+                                if(!p.healedSelf){
+                                    tgt.hp = Math.min(tgt.maxHp, tgt.hp + 30);
+                                    sfxHeal(); spawnHealPop(tgt.x, tgt.y, 30);
+                                    p.healedSelf = true;
+                                }
+                            } else if(tgt.owner !== p.owner){
+                                const lastHit = p.hitCooldowns.get(tgt) || 0;
+                                if(now - lastHit > 300){
+                                    if(tgt.role.id === 'renqiuhong' && Math.random() < 0.5){
+                                        sfxDodge(); spawnDodgePop(tgt.x, tgt.y);
+                                    } else {
+                                        tgt.hp -= p.damage;
+                                        tgt.flashTimer=150;
+                                        sfxHit(); spawnDamagePop(tgt.x,tgt.y,p.damage);
+                                    }
+                                    p.hitCooldowns.set(tgt, now);
+                                }
+                            }
+                        } else if(p.type==='spinach' || p.type==='popcorn'){
+                            if(tgt.owner !== p.owner){
+                                tgt.hp -= p.damage;
+                                tgt.flashTimer=150;
+                                sfxHit(); spawnDamagePop(tgt.x,tgt.y,p.damage);
+                                spawnParticles(p.x,p.y,p.color,5);
+                                shouldRemove = true; break;
+                            }
+                        } else {
+                            if(tgt.owner !== p.owner){
+                                if(p.type==='computer'){
+                                    tgt.frozenUntil=performance.now()+3000; sfxFreeze();
+                                }else{
+                                    if(tgt.role.id === 'renqiuhong' && Math.random() < 0.5){
+                                        sfxDodge(); spawnDodgePop(tgt.x, tgt.y);
+                                    } else {
+                                        tgt.hp -= p.damage;
+                                        tgt.flashTimer=150;
+                                        sfxHit(); spawnDamagePop(tgt.x,tgt.y,p.damage);
+                                    }
+                                }
+                                spawnParticles(p.x,p.y,'#ff4444',8);
+                                shouldRemove = true; break;
+                            }
+                        }
+                    }
+                }
+                if(shouldRemove){
+                    projectiles.splice(i,1);
+                }else if(now-p.born>15000){
+                    projectiles.splice(i,1);
+                }
+            }
+            // 刘焜：食物生成（每5秒5个，上限20）与进食回血变大
+            if(entities.some(e=>e.role.id==='liukun'&&e.hp>0) && ts>=foodTimer){
+                foodTimer=ts+5000;
+                const FOOD_EMOJI=['🍎','🍔','🍗','🍰','🍕','🍩','🥟'];
+                for(let i=0;i<5&&foods.length<20;i++){ foods.push({x:25+Math.random()*(arenaSize-50), y:25+Math.random()*(arenaSize-50), emoji:FOOD_EMOJI[Math.floor(Math.random()*FOOD_EMOJI.length)]}); }
+            }
+            for(let i=foods.length-1;i>=0;i--){
+                const f=foods[i]; let eaten=false;
+                for(const e of entities){
+                    if(e.hp<=0||e.role.id!=='liukun') continue;
+                    const fdx=e.x-f.x, fdy=e.y-f.y;
+                    if(Math.sqrt(fdx*fdx+fdy*fdy)<e.size/2+8){
+                        eaten=true;
+                        e.hp=Math.min(e.maxHp,e.hp+2);
+                        e.size=Math.min(e.size+1.5,64);
+                        sfxHeal(); spawnHealPop(e.x,e.y,2); spawnParticles(f.x,f.y,'#90ee90',5);
+                        break;
+                    }
+                }
+                if(eaten) foods.splice(i,1);
+            }
+            for(let i=particles.length-1;i>=0;i--){ particles[i].x+=particles[i].vx; particles[i].y+=particles[i].vy; particles[i].life-=16; if(particles[i].life<=0) particles.splice(i,1); }
+            // 复活逻辑
+            for(let i=entities.length-1; i>=0; i--){
+                const e = entities[i];
+                if(e.hp<=0 && e.role.hasRevive && !e.revived && !e.isEmperor){
+                    e.hp = e.maxHp;
+                    e.revived = true;
+                    e.invincibleUntil = performance.now() + 1000;
+                    sfxRevive();
+                    spawnRevivePop(e.x, e.y);
+                }
+            }
+            entities = entities.filter(e=>{
+                if(e.hp<=0 && e.frozenLabelEl){ e.frozenLabelEl.remove(); }
+                return e.hp>0;
+            });
+        }
+
+        // ============ 渲染 ============
+        function rrPath(x,y,w,h,r){ r=Math.min(r,w/2,h/2); ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+        function drawBedroom(){
+            const S=arenaSize;
+            // 木地板（俯视整层）+ 板缝
+            const fg=ctx.createLinearGradient(0,0,0,S); fg.addColorStop(0,'#6b4a2e'); fg.addColorStop(1,'#54381f');
+            ctx.fillStyle=fg; ctx.fillRect(0,0,S,S);
+            ctx.strokeStyle='rgba(0,0,0,0.15)'; ctx.lineWidth=1.5;
+            for(let y=S*0.033;y<S;y+=S*0.035){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(S,y); ctx.stroke(); }
+            // 窗光斜铺在地板上
+            const pool=ctx.createLinearGradient(0,S*0.05,0,S*0.62); pool.addColorStop(0,'rgba(255,228,150,0.30)'); pool.addColorStop(1,'rgba(255,228,150,0)');
+            ctx.fillStyle=pool; ctx.beginPath(); ctx.moveTo(S*0.72,S*0.05); ctx.lineTo(S*0.92,S*0.05); ctx.lineTo(S*1.0,S*0.62); ctx.lineTo(S*0.50,S*0.62); ctx.closePath(); ctx.fill();
+            // 圆地毯
+            ctx.fillStyle='rgba(122,90,158,0.9)'; ctx.beginPath(); ctx.arc(S*0.37,S*0.60,S*0.155,0,Math.PI*2); ctx.fill();
+            ctx.strokeStyle='rgba(255,255,255,0.14)'; ctx.lineWidth=4; ctx.beginPath(); ctx.arc(S*0.37,S*0.60,S*0.115,0,Math.PI*2); ctx.stroke();
+            ctx.strokeStyle='rgba(255,255,255,0.08)'; ctx.beginPath(); ctx.arc(S*0.37,S*0.60,S*0.075,0,Math.PI*2); ctx.stroke();
+            // 床（俯视：床头贴上墙，双枕+蓝被）
+            const bx=S*0.57, by=S*0.13, bw=S*0.33, bh=S*0.47;
+            ctx.fillStyle='#6d4a28'; rrPath(bx,by,bw,bh,8); ctx.fill();
+            ctx.strokeStyle='rgba(0,0,0,0.25)'; ctx.lineWidth=2; rrPath(bx,by,bw,bh,8); ctx.stroke();
+            ctx.fillStyle='#7a5230'; rrPath(bx+2,by+2,bw-4,bh*0.08,5); ctx.fill();
+            ctx.fillStyle='#f0e8d2'; rrPath(bx+bw*0.04,by+bh*0.11,bw*0.92,bh*0.85,6); ctx.fill();
+            ctx.fillStyle='#ffffff'; rrPath(bx+bw*0.07,by+bh*0.14,bw*0.38,bh*0.15,7); ctx.fill();
+            ctx.fillStyle='#f2ede0'; rrPath(bx+bw*0.55,by+bh*0.14,bw*0.38,bh*0.15,7); ctx.fill();
+            const bl=ctx.createLinearGradient(0,by+bh*0.36,0,by+bh*0.96); bl.addColorStop(0,'#5a8fd6'); bl.addColorStop(1,'#3a63a8');
+            ctx.fillStyle=bl; rrPath(bx+bw*0.04,by+bh*0.36,bw*0.92,bh*0.60,6); ctx.fill();
+            ctx.strokeStyle='rgba(255,255,255,0.20)'; ctx.lineWidth=2;
+            ctx.beginPath(); ctx.moveTo(bx+bw*0.06,by+bh*0.50); ctx.lineTo(bx+bw*0.94,by+bh*0.50); ctx.stroke();
+            ctx.strokeStyle='rgba(0,0,0,0.14)';
+            ctx.beginPath(); ctx.moveTo(bx+bw*0.06,by+bh*0.78); ctx.lineTo(bx+bw*0.94,by+bh*0.78); ctx.stroke();
+            // 床头柜+闹钟
+            ctx.fillStyle='#5d3d20'; rrPath(S*0.915,S*0.15,S*0.068,S*0.12,4); ctx.fill();
+            ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.font=Math.round(S*0.05)+'px sans-serif';
+            ctx.fillText('⏰',S*0.949,S*0.21);
+            ctx.fillText('🥿🥿',S*0.68,S*0.72);
+            // 书桌+电脑+椅子（左下）
+            ctx.fillStyle='#6d4a28'; rrPath(S*0.05,S*0.66,S*0.24,S*0.26,5); ctx.fill();
+            ctx.fillStyle='#0d0f1c'; rrPath(S*0.075,S*0.685,S*0.125,S*0.09,3); ctx.fill();
+            ctx.save(); ctx.shadowColor='rgba(90,140,255,0.7)'; ctx.shadowBlur=12; ctx.fillStyle='rgba(90,140,255,0.30)'; rrPath(S*0.079,S*0.689,S*0.117,S*0.082,2); ctx.fill(); ctx.restore();
+            ctx.fillStyle='#2c2f3e'; rrPath(S*0.079,S*0.81,S*0.115,S*0.032,2); ctx.fill();
+            ctx.fillStyle='#3a4468'; ctx.beginPath(); ctx.arc(S*0.26,S*0.76,S*0.052,0,Math.PI*2); ctx.fill();
+            ctx.strokeStyle='#2c3550'; ctx.lineWidth=4; ctx.beginPath(); ctx.arc(S*0.26,S*0.76,S*0.052,0,Math.PI*2); ctx.stroke();
+            // 顶部墙带
+            ctx.fillStyle='#3c2a17'; ctx.fillRect(0,0,S,S*0.065);
+            ctx.fillStyle='rgba(255,255,255,0.05)'; ctx.fillRect(0,0,S,S*0.02);
+            ctx.fillStyle='#241708'; ctx.fillRect(0,S*0.065-2.5,S,2.5);
+            // 窗（墙带上的亮口）
+            ctx.save(); ctx.shadowColor='rgba(255,210,120,0.9)'; ctx.shadowBlur=16;
+            ctx.fillStyle='#ffe9ae'; ctx.fillRect(S*0.74,1,S*0.16,S*0.065-3); ctx.restore();
+            ctx.fillStyle='rgba(140,100,40,0.55)'; ctx.fillRect(S*0.817,1,2.5,S*0.065-3);
+            // 门（敞开：亮口+光带+门板斜进屋内）
+            ctx.fillStyle='#ffe2a0'; ctx.fillRect(S*0.07,1,S*0.16,S*0.065-3);
+            const dh=ctx.createLinearGradient(S*0.07,S*0.065,S*0.05,S*0.46); dh.addColorStop(0,'rgba(255,216,140,0.40)'); dh.addColorStop(1,'rgba(255,216,140,0)');
+            ctx.fillStyle=dh; ctx.beginPath(); ctx.moveTo(S*0.07,S*0.065); ctx.lineTo(S*0.21,S*0.065); ctx.lineTo(S*0.30,S*0.46); ctx.lineTo(S*0.03,S*0.46); ctx.closePath(); ctx.fill();
+            ctx.save(); ctx.translate(S*0.07,S*0.033); ctx.rotate(104*Math.PI/180);
+            ctx.fillStyle='#7a5230'; ctx.fillRect(0,-2,S*0.16,4); ctx.strokeStyle='#46301b'; ctx.lineWidth=1.5; ctx.strokeRect(0,-2,S*0.16,4);
+            ctx.fillStyle='#ffeab0'; ctx.beginPath(); ctx.arc(S*0.155,0,2.5,0,Math.PI*2); ctx.fill(); ctx.restore();
+            // 暗角（俯视纵深）
+            const vg=ctx.createRadialGradient(S/2,S*0.42,S*0.30,S/2,S*0.42,S*0.78); vg.addColorStop(0,'rgba(0,0,0,0)'); vg.addColorStop(1,'rgba(0,0,0,0.42)');
+            ctx.fillStyle=vg; ctx.fillRect(0,0,S,S);
+        }
+        function render(){
+            ctx.clearRect(0,0,arenaSize,arenaSize);
+            if(gameMode==='storyduel'){ drawBedroom(); }
+            else{
+            const bg=ctx.createRadialGradient(arenaSize/2,arenaSize/2,0,arenaSize/2,arenaSize/2,arenaSize*0.8);
+            bg.addColorStop(0,'#2a2a40'); bg.addColorStop(1,'#141420'); ctx.fillStyle=bg; ctx.fillRect(0,0,arenaSize,arenaSize);
+            ctx.strokeStyle='rgba(255,255,255,0.04)'; for(let i=arenaSize/8;i<arenaSize;i+=arenaSize/8){ ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,arenaSize); ctx.stroke(); ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(arenaSize,i); ctx.stroke(); }
+            ctx.strokeStyle='rgba(240,192,96,0.3)'; ctx.lineWidth=2.5; ctx.strokeRect(2,2,arenaSize-4,arenaSize-4);
+            if(gameMode==='dual'){ ctx.setLineDash([8,12]); ctx.strokeStyle='rgba(255,255,255,0.15)'; ctx.beginPath(); ctx.moveTo(0,arenaSize/2); ctx.lineTo(arenaSize,arenaSize/2); ctx.stroke(); ctx.setLineDash([]); }
+            }
+            projectiles.forEach(p=>{
+                ctx.save();
+                if(p.type==='leg'){ const s=p.size,a=Math.atan2(p.vy,p.vx); ctx.translate(p.x,p.y); ctx.rotate(a); ctx.strokeStyle=p.color; ctx.lineWidth=s*0.35; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(-s*0.3,0); ctx.lineTo(0,-s*0.5); ctx.lineTo(s*0.5,-s*0.3); ctx.stroke(); }
+                else if(p.type==='belt'){
+                    const s=p.size, L=s*2.35, H=s*0.58, wob=Math.sin((performance.now()-p.born)*0.022)*0.12;
+                    ctx.translate(p.x,p.y); ctx.rotate(Math.atan2(p.vy,p.vx)+wob);
+                    function rr(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+                    // 皮带尾端（分叉飘带）
+                    ctx.strokeStyle='#4d2c13'; ctx.lineWidth=2.4; ctx.lineCap='round';
+                    for(let k=-1;k<=1;k++){ ctx.beginPath(); ctx.moveTo(-L*0.42,0); ctx.lineTo(-L*0.55, k*H*0.32); ctx.stroke(); }
+                    // 带身
+                    const bg=ctx.createLinearGradient(0,-H/2,0,H/2); bg.addColorStop(0,'#a76a35'); bg.addColorStop(0.5,'#7c4a20'); bg.addColorStop(1,'#55300f');
+                    rr(-L*0.42,-H/2,L*0.66,H,5); ctx.fillStyle=bg; ctx.fill(); ctx.strokeStyle='#3d230c'; ctx.lineWidth=1.6; ctx.stroke();
+                    // 双道缝线
+                    ctx.strokeStyle='rgba(255,225,180,0.35)'; ctx.lineWidth=1; ctx.setLineDash([3.5,3]);
+                    [-H*0.28,H*0.28].forEach(y=>{ ctx.beginPath(); ctx.moveTo(-L*0.36,y); ctx.lineTo(L*0.2,y); ctx.stroke(); });
+                    ctx.setLineDash([]);
+                    // 带孔
+                    ctx.fillStyle='#2a1708';
+                    for(let i=0;i<3;i++){ ctx.beginPath(); ctx.arc(-L*0.18-i*H*0.42,0,1.6,0,Math.PI*2); ctx.fill(); }
+                    // 金属带扣（七匹狼）
+                    const bx=L*0.24, bw=H*1.15;
+                    const mg=ctx.createLinearGradient(bx,-H*0.62,bx+bw,H*0.62); mg.addColorStop(0,'#f2f4fa'); mg.addColorStop(0.45,'#a9b0c2'); mg.addColorStop(0.6,'#ffffff'); mg.addColorStop(1,'#7d8499');
+                    rr(bx,-H*0.62,bw,bw,4); ctx.fillStyle=mg; ctx.fill(); ctx.strokeStyle='#5d6678'; ctx.lineWidth=1.4; ctx.stroke();
+                    rr(bx+bw*0.24,-H*0.36,bw*0.52,bw*0.72,2); ctx.fillStyle='#2a1708'; ctx.fill();
+                    ctx.fillStyle='#e8ecf6'; ctx.fillRect(bx+bw*0.1,-2,bw*0.8,4);
+                    ctx.shadowColor='rgba(0,0,0,0)';
+                }
+                else if(p.type==='z'){ ctx.fillStyle=p.color; ctx.font=`bold ${p.size+5}px sans-serif`; ctx.textAlign='center'; ctx.fillText('Z',p.x,p.y); }
+                else if(p.type==='sonic'){ const now=performance.now()*0.004; ctx.save(); ctx.shadowColor='#ffffff'; ctx.shadowBlur=14; for(let r=0;r<3;r++){ const phase=(now+r*0.33)%1; ctx.strokeStyle='#ffffff'; ctx.globalAlpha=0.85*(1-phase); ctx.lineWidth=2.5-phase*1.5; ctx.beginPath(); ctx.arc(p.x,p.y,p.size*0.3+phase*p.size*0.95,0,Math.PI*2); ctx.stroke(); } ctx.globalAlpha=1; ctx.fillStyle='#ffffff'; ctx.beginPath(); ctx.arc(p.x,p.y,p.size*0.24,0,Math.PI*2); ctx.fill(); ctx.restore(); }
+                else if(p.type==='luxury'){ ctx.font=`${p.size+7}px sans-serif`; ctx.textAlign='center'; ctx.fillText(p.emoji||'🚗',p.x,p.y); }
+                else if(p.type==='computer'){ ctx.font=`${p.size+5}px sans-serif`; ctx.textAlign='center'; ctx.fillText('💻',p.x,p.y); }
+                else if(p.type==='beef'){ ctx.font=`${p.size+6}px sans-serif`; ctx.textAlign='center'; ctx.fillText('🍔',p.x,p.y); }
+                else if(p.type==='spinach'){ ctx.font=`${p.size+4}px sans-serif`; ctx.textAlign='center'; ctx.fillText('🥬',p.x,p.y); }
+                else if(p.type==='popcorn'){ ctx.font=`${p.size+4}px sans-serif`; ctx.textAlign='center'; ctx.fillText('🍿',p.x,p.y); }
+                ctx.restore();
+            });
+            foods.forEach(f=>{ ctx.font='14px sans-serif'; ctx.textAlign='center'; ctx.fillText(f.emoji,f.x,f.y+5); });
+            entities.forEach(e=>{
+                if(e.hp<=0) return;
+                ctx.save(); if(e.flashTimer>0) ctx.globalAlpha=0.7+Math.sin(e.flashTimer*0.3)*0.3;
+                if(e.charging && e.charging.hp>0){
+                    ctx.strokeStyle='rgba(255,60,60,0.75)'; ctx.lineWidth=2; ctx.setLineDash([6,6]);
+                    ctx.beginPath(); ctx.moveTo(e.x,e.y); ctx.lineTo(e.charging.x,e.charging.y); ctx.stroke();
+                    ctx.setLineDash([]);
+                    ctx.strokeStyle='#ff4444'; ctx.lineWidth=2.5;
+                    ctx.beginPath(); ctx.arc(e.x,e.y,e.size/2+5+Math.sin(performance.now()*0.015)*2,0,Math.PI*2); ctx.stroke();
+                }
+                if(performance.now()<e.frozenUntil){
+                    ctx.strokeStyle='#00ffff'; ctx.lineWidth=2.5; ctx.beginPath(); ctx.arc(e.x,e.y,e.size/2+4,0,Math.PI*2); ctx.stroke();
+                }
+                if(performance.now() < e.invincibleUntil){
+                    ctx.strokeStyle='#90ee90'; ctx.lineWidth=2; ctx.setLineDash([4,4]); ctx.beginPath(); ctx.arc(e.x,e.y,e.size/2+6,0,Math.PI*2); ctx.stroke(); ctx.setLineDash([]);
+                }
+                const glow=ctx.createRadialGradient(e.x,e.y,e.size*0.3,e.x,e.y,e.size*0.85); glow.addColorStop(0,e.role.color+'50'); glow.addColorStop(1,'transparent'); ctx.fillStyle=glow; ctx.beginPath(); ctx.arc(e.x,e.y,e.size*0.85,0,Math.PI*2); ctx.fill();
+                ctx.fillStyle=e.role.color; ctx.beginPath(); ctx.arc(e.x,e.y,e.size/2,0,Math.PI*2); ctx.fill();
+                ctx.fillStyle='#fff'; ctx.font=`${e.size*0.55}px sans-serif`; ctx.textAlign='center'; ctx.fillText(e.role.avatar,e.x,e.y+1);
+                if(e.isManual && joySkill.active){
+                    const sm=Math.hypot(joySkill.x,joySkill.y);
+                    if(sm>0.15){
+                        const ax=joySkill.x/sm, ay=joySkill.y/sm;
+                        const rdy = performance.now()-e.lastSkillTime;
+                        const ready = rdy>=e.role.skillInterval;
+                        ctx.save();
+                        ctx.strokeStyle = ready?e.role.color:'rgba(255,255,255,0.35)';
+                        ctx.lineWidth = 2.5;
+                        ctx.setLineDash([7,6]);
+                        ctx.beginPath();
+                        ctx.moveTo(e.x+ax*e.size/2, e.y+ay*e.size/2);
+                        ctx.lineTo(e.x+ax*(e.size/2+80), e.y+ay*(e.size/2+80));
+                        ctx.stroke();
+                        ctx.setLineDash([]);
+                        // 瞄准终点小点
+                        ctx.fillStyle = ready?e.role.color:'rgba(255,255,255,0.5)';
+                        ctx.beginPath(); ctx.arc(e.x+ax*(e.size/2+80), e.y+ay*(e.size/2+80), 3.5, 0, Math.PI*2); ctx.fill();
+                        ctx.restore();
+                    }
+                }
+                if(e.isManual&&IS_PC){ const rdy=performance.now()-e.lastSkillTime, iv=e.role.skillInterval||1; if(rdy<iv){ const frac=1-rdy/iv; ctx.strokeStyle='rgba(0,0,0,0.55)'; ctx.lineWidth=3; ctx.beginPath(); ctx.arc(e.x,e.y,e.size/2+5,-Math.PI/2,-Math.PI/2+Math.PI*2*frac); ctx.stroke(); } }
+                const hpW=e.size*1.1; ctx.fillStyle='#333'; ctx.fillRect(e.x-hpW/2,e.y-e.size/2-8,hpW,4);
+                const hpP=Math.max(0,e.hp/e.maxHp); ctx.fillStyle=hpP>0.5?'#5cb85c':hpP>0.25?'#f0ad4e':'#e74c3c'; ctx.fillRect(e.x-hpW/2,e.y-e.size/2-8,hpW*hpP,4);
+                ctx.restore();
+            });
+            particles.forEach(p=>{ ctx.fillStyle=p.color; ctx.globalAlpha=Math.min(1,p.life/500); ctx.beginPath(); ctx.arc(p.x,p.y,p.size,0,Math.PI*2); ctx.fill(); ctx.globalAlpha=1; });
+            for(let i=smokes.length-1;i>=0;i--){
+                const s=smokes[i], t=(performance.now()-s.born)/400;
+                if(t>=1){ smokes.splice(i,1); continue; }
+                const grow=t<0.35?t/0.35:1, fade=t<0.3?1:Math.max(0,1-(t-0.3)/0.7);
+                s.puffs.forEach(p=>{
+                    const px=s.x+p.dx*grow*1.5, py=s.y+p.dy*grow*1.5-t*8, r=p.r*grow*1.7;
+                    const g=ctx.createRadialGradient(px,py,0,px,py,r);
+                    g.addColorStop(0,'rgba(208,208,216,'+(0.6*fade).toFixed(2)+')');
+                    g.addColorStop(0.6,'rgba(190,190,200,'+(0.35*fade).toFixed(2)+')');
+                    g.addColorStop(1,'rgba(190,190,200,0)');
+                    ctx.fillStyle=g; ctx.beginPath(); ctx.arc(px,py,r,0,Math.PI*2); ctx.fill();
+                });
+            }
+        }
+
+        // ============ 主循环 ============
+        function gameLoop(ts){
+            if(!battleActive) return;
+            animationId=requestAnimationFrame(gameLoop);
+            update(ts); render(); updateHUD();
+            const alive = entities.filter(e => e.hp > 0);
+            const owners = new Set(alive.map(e => e.owner));
+            if (alive.length === 0 || owners.size <= 1) {
+                battleActive = false; cancelAnimationFrame(animationId); animationId = null;
+                if(gameMode==='storyduel'){
+                    const me=entities[0];
+                    const dad=entities.find(e=>e!==me&&e.hp>0);
+                    const win=alive.length>0 && me && me.hp>0;
+                    const ratio=win?Math.max(0,me.hp/me.maxHp):(dad?Math.max(0,dad.hp/dad.maxHp):0);
+                    render(); updateHUD();
+                    storyDuelEnd(win,ratio);
+                    return;
+                }
+                sfxWin();
+                const endBtn = document.getElementById('btnEndBattle'); if(endBtn) endBtn.style.display='none';
+                const rematchBtn = document.getElementById('btnRematch'); if(rematchBtn) rematchBtn.style.display='inline-block';
+                const resultEl = document.getElementById('battleResult');
+                if (alive.length === 0) {
+                    if(resultEl) resultEl.textContent = '💀 全部阵亡！';
+                    showVictory('同归于尽 💀', '💀', '#888888');
+                } else {
+                    const winner = alive.find(e => !e.isEmperor) || alive[0];
+                    const label = winner.isEmperor ? ('皇帝(' + (winner.summoner ? rn(winner.summoner.role) : '?') + ')') : (gameMode==='dual' ? (winner.owner==='player1'?'玩家1':'玩家2') : rn(winner.role));
+                    if(resultEl) resultEl.textContent = `🏆 ${label} 获胜！`;
+                    showVictory(label+' 获胜！', winner.role.avatar, winner.role.color);
+                }
+                render(); updateHUD();
+            }
+        }
+
+        // ============ 胜利结算（全局） ============
+        function showVictory(text, avatar, color){
+            const a=document.getElementById('vicAvatar'), n=document.getElementById('vicName'), c=document.getElementById('vicConfetti');
+            if(a){ a.textContent=avatar; if(color){ a.style.borderColor=color; a.style.boxShadow='0 0 40px '+color+'88'; } }
+            if(n) n.textContent=text;
+            if(c){ c.innerHTML=''; const colors=['#f0c060','#ff6b8a','#66ccff','#90ee90','#c8a0ff']; for(let i=0;i<16;i++){ const s=document.createElement('span'); s.className='confetti'; s.style.left=(Math.random()*100)+'%'; s.style.background=colors[i%colors.length]; s.style.animationDelay=(Math.random()*0.8)+'s'; s.style.animationDuration=(1.6+Math.random()*1.4)+'s'; c.appendChild(s); } }
+            showScreen(document.getElementById('screenVictory'));
+        }
+
+        // ============ 流程控制 ============
+        function stopBattle(){
+            battleActive=false;
+            if(animationId) cancelAnimationFrame(animationId);
+            entities.forEach(e=>{ if(e.frozenLabelEl){ e.frozenLabelEl.remove(); } });
+            entities=[]; projectiles=[]; particles=[]; smokes=[]; foods=[];
+            document.querySelectorAll('.damage-pop,.heal-pop,.dodge-pop,.frozen-fixed,.revive-pop,.phone-pop').forEach(e=>e.remove());
+            const jmw0=document.getElementById('joyMoveWrap'), jsw0=document.getElementById('joySkillWrap'), kh0=document.getElementById('kbHint');
+            if(jmw0) jmw0.style.display='none'; if(jsw0) jsw0.style.display='none'; if(kh0) kh0.style.display='none';
+            isManualBattle=false; manualEnt=null; resetJoysticks();
+        }
+        function endBattle(){ stopBattle(); if(gameMode==='storyduel'){ showScreen(document.getElementById('screenStory')); requestAnimationFrame(()=>requestAnimationFrame(buildStoryMap)); } else goToModeSelect(); }
+        function rematch(){
+            if(gameMode==='free'){ const tmp=player1Role; player1Role=player2Role; player2Role=tmp; if(player1Role&&player2Role) initBattle([player1Role,player2Role]); }
+            else if(gameMode==='dual'){ resetDrawState(); showScreen(document.getElementById('screenDualDraw')); stopBattle(); }
+            else if(gameMode==='br'){ goToModeSelect(); }
+            else if(gameMode==='manual'){ if(manualMyRole&&manualEnemyRole) initBattle([manualMyRole,manualEnemyRole]); }
+            else if(gameMode==='storyduel'){ startStoryDuel(); }
+        }
+
+        // ===== 沉浸光感 (Beta，默认关闭) =====
+        const LIGHT_SEL='.btn, .card-display, .modal-box, .set-item';
+        let lightOn=false;
+        function applyLightSettings(){
+            let en='0', lv='gentle', unlocked=false;
+            try{ en=localStorage.getItem('lightEnabled')||'0'; lv=localStorage.getItem('lightLevel')||'gentle'; unlocked=localStorage.getItem('lightUnlocked')==='1'; }catch(e){}
+            lightOn=(en==='1')&&unlocked;
+            const supportsBlur=CSS.supports('backdrop-filter','blur(10px)')||CSS.supports('-webkit-backdrop-filter','blur(10px)');
+            if(lightOn&&!supportsBlur) lightOn=false;
+            if(lightOn) document.documentElement.dataset.light=lv; else document.documentElement.removeAttribute('data-light');
+            const ds=document.getElementById('btnDevSetting'); if(ds) ds.style.display=unlocked?'flex':'none';
+            const dt=document.getElementById('btnDevToggle'); if(dt) dt.classList.toggle('on',unlocked);
+            const ls=document.getElementById('btnLightSetting'); if(ls) ls.style.display=unlocked?'flex':'none';
+            const tg=document.getElementById('btnLightToggle'); if(tg) tg.classList.toggle('on',lightOn);
+            const wrap=document.getElementById('lightSegWrap'); if(wrap){ wrap.style.opacity=lightOn?'1':'0.35'; wrap.style.pointerEvents=lightOn?'auto':'none'; }
+            document.querySelectorAll('#lightSeg .seg-btn').forEach(b=>b.classList.toggle('active',lightOn&&b.dataset.level===lv));
+            let sm='0'; try{ sm=localStorage.getItem('storyMode')||'0'; }catch(e){}
+            const storyOn=(sm==='1')&&unlocked;
+            const st=document.getElementById('btnStoryToggle'); if(st) st.classList.toggle('on',storyOn);
+            const smb=document.getElementById('btnStoryMode'); if(smb) smb.style.display=storyOn?'':'none';
+            let an='0'; try{ an=localStorage.getItem('moreAnim')||'0'; }catch(e){}
+            const animOn=(an==='1')&&unlocked;
+            if(animOn) document.documentElement.dataset.anim='1'; else document.documentElement.removeAttribute('data-anim');
+            const at=document.getElementById('btnAnimToggle'); if(at) at.classList.toggle('on',animOn);
+            let hn='0'; try{ hn=localStorage.getItem('hideNames')||'0'; }catch(e){}
+            hideNames=(hn==='1')&&unlocked;
+            const ht=document.getElementById('btnHideNameToggle'); if(ht) ht.classList.toggle('on',hideNames);
+            syncHiddenNames();
+        }
+        function attachLightLayer(el){ if(el._lightLayer) return; const layer=document.createElement('span'); layer.className='glass-light'; el.appendChild(layer); el._lightLayer=layer; el.classList.add('glass'); }
+        function initLightSense(){
+            applyLightSettings();
+            let rafId=null, px=0, py=0, pEl=null;
+            document.addEventListener('pointermove',(ev)=>{ if(!lightOn) return; px=ev.clientX; py=ev.clientY; pEl=ev.target&&ev.target.closest?ev.target.closest(LIGHT_SEL):null; if(rafId) return; rafId=requestAnimationFrame(()=>{ rafId=null; if(pEl&&pEl.isConnected){ if(!pEl.classList.contains('glass')) attachLightLayer(pEl); if(pEl._lightLayer){ const r=pEl.getBoundingClientRect(); pEl._lightLayer.style.setProperty('--mx',(px-r.left)+'px'); pEl._lightLayer.style.setProperty('--my',(py-r.top)+'px'); const ang=(Math.atan2(py-(r.top+r.height/2),px-(r.left+r.width/2))*180/Math.PI+450)%360; pEl.style.setProperty('--la',(ang-305)+'deg'); pEl.classList.add('on'); } } }); },{passive:true});
+            document.addEventListener('pointerout',(ev)=>{ const el=ev.target&&ev.target.closest?ev.target.closest(LIGHT_SEL):null; if(el) el.classList.remove('on'); },{passive:true});
+            document.addEventListener('pointerdown',(ev)=>{ if(!lightOn) return; const el=ev.target&&ev.target.closest?ev.target.closest(LIGHT_SEL):null; if(!el) return; if(!el.classList.contains('glass')) attachLightLayer(el); const r=el.getBoundingClientRect(); el.style.transformOrigin=(ev.clientX-r.left)+'px '+(ev.clientY-r.top)+'px'; el.classList.add('pressing'); el.style.transform='scale(1.05,0.9)'; const ring=document.createElement('span'); ring.className='glow-ring'; const sz=Math.max(r.width,r.height)*1.2; ring.style.cssText='width:'+sz+'px;height:'+sz+'px;left:'+(ev.clientX-r.left)+'px;top:'+(ev.clientY-r.top)+'px;'; el.appendChild(ring); setTimeout(()=>ring.remove(),600); },{passive:true});
+            const unpress=()=>{ document.querySelectorAll('.glass.pressing').forEach(el=>{ el.classList.remove('pressing'); el.style.transform=''; el.style.transformOrigin=''; el.classList.remove('wobble'); void el.offsetWidth; el.classList.add('wobble'); setTimeout(()=>el.classList.remove('wobble'),480); }); };
+            document.addEventListener('pointerup',unpress,{passive:true});
+            document.addEventListener('pointercancel',unpress,{passive:true});
+            document.querySelectorAll('#lightSeg .seg-btn').forEach(b=>b.addEventListener('click',()=>{ sfxClick(); try{ localStorage.setItem('lightLevel',b.dataset.level); }catch(e){} applyLightSettings(); }));
+        }
+
+        // ============ 摇杆布局（位置/大小自定义，持久化） ============
+        const DEFAULT_JOY_LAYOUT={ move:{x:13,y:86,s:108}, skill:{x:87,y:86,s:108} };
+        let joyLayout=JSON.parse(JSON.stringify(DEFAULT_JOY_LAYOUT));
+        function loadJoyLayout(){ try{ const raw=localStorage.getItem('joyLayout'); if(raw){ const p=JSON.parse(raw); if(p&&p.move&&p.skill&&p.move.x!=null) joyLayout=p; } }catch(e){} applyJoyLayout(); renderJoyPreview(); }
+        function saveJoyLayout(){ try{ localStorage.setItem('joyLayout',JSON.stringify(joyLayout)); }catch(e){} }
+        function applyJoyLayout(){
+            [['joyMoveWrap','move'],['joySkillWrap','skill']].forEach(([id,k])=>{
+                const w=document.getElementById(id); if(!w) return;
+                const c=joyLayout[k], half=c.s/2;
+                w.style.width=c.s+'px'; w.style.height=c.s+'px';
+                w.style.left=c.x+'%'; w.style.top=c.y+'%';
+                w.style.right='auto'; w.style.bottom='auto';
+                w.style.marginLeft=(-half)+'px'; w.style.marginTop=(-half)+'px';
+            });
+        }
+        function renderJoyPreview(){
+            [['jpMove','move'],['jpSkill','skill']].forEach(([id,k])=>{
+                const el=document.getElementById(id); if(!el) return;
+                const c=joyLayout[k], ps=Math.round(c.s*0.64);
+                el.style.left=c.x+'%'; el.style.top=c.y+'%';
+                el.style.width=ps+'px'; el.style.height=ps+'px';
+            });
+            const r=document.getElementById('joySizeRange'), v=document.getElementById('joySizeVal');
+            if(r) r.value=joyLayout.move.s; if(v) v.textContent=joyLayout.move.s;
+        }
+        function initJoySettings(){
+            const box=document.getElementById('joyPreview');
+            [['jpMove','move'],['jpSkill','skill']].forEach(([id,k])=>{
+                const el=document.getElementById(id); let pid=null, bx=0, by=0, w=0, h=0;
+                function start(ev){ pid=ev.pointerId; try{ el.setPointerCapture(pid); }catch(e){} const r=box.getBoundingClientRect(); bx=r.left; by=r.top; w=r.width; h=r.height; ev.preventDefault(); }
+                function move(ev){ if(ev.pointerId!==pid) return; let px=(ev.clientX-bx)/w*100, py=(ev.clientY-by)/h*100; px=Math.max(8,Math.min(92,px)); py=Math.max(10,Math.min(94,py)); joyLayout[k].x=Math.round(px); joyLayout[k].y=Math.round(py); renderJoyPreview(); applyJoyLayout(); }
+                function end(ev){ if(ev.pointerId!==pid) return; pid=null; saveJoyLayout(); sfxClick(); }
+                el.addEventListener('pointerdown',start);
+                el.addEventListener('pointermove',move);
+                el.addEventListener('pointerup',end);
+                el.addEventListener('pointercancel',end);
+            });
+            const range=document.getElementById('joySizeRange');
+            if(range) range.addEventListener('input',()=>{ const s=+range.value; joyLayout.move.s=s; joyLayout.skill.s=s; renderJoyPreview(); applyJoyLayout(); });
+            if(range) range.addEventListener('change',()=>saveJoyLayout());
+        }
+
+        // ============ 双摇杆（手动对战） ============
+        function setupJoystick(baseId, vec, onEnd){
+            const base=document.getElementById(baseId);
+            const knob=base.querySelector('.joy-knob');
+            let pid=null, cx=0, cy=0, R=40;
+            function knobAt(dx,dy){ knob.style.transform='translate(calc(-50% + '+dx.toFixed(1)+'px), calc(-50% + '+dy.toFixed(1)+'px))'; }
+            function start(ev){ if(pid!==null) return; pid=ev.pointerId; try{ base.setPointerCapture(pid); }catch(e){} const r=base.getBoundingClientRect(); cx=r.left+r.width/2; cy=r.top+r.height/2; R=r.width*0.37; vec.active=true; vec._touch=true; move(ev); ev.preventDefault(); }
+            function move(ev){ if(ev.pointerId!==pid) return; let dx=ev.clientX-cx, dy=ev.clientY-cy; const d=Math.hypot(dx,dy); if(d>R){ dx=dx/d*R; dy=dy/d*R; } knobAt(dx,dy); vec.x=dx/R; vec.y=dy/R; }
+            function end(ev){ if(ev.pointerId!==pid) return; pid=null; vec.active=false; vec._touch=false; const fx=vec.x, fy=vec.y; vec.x=0; vec.y=0; knob.style.transform='translate(-50%,-50%)'; if(onEnd) onEnd(fx,fy); }
+            base.addEventListener('pointerdown',start);
+            base.addEventListener('pointermove',move);
+            base.addEventListener('pointerup',end);
+            base.addEventListener('pointercancel',end);
+            base.addEventListener('lostpointercapture',end);
+        }
+        function tryManualSkill(fx,fy){
+            const mag=Math.hypot(fx,fy);
+            if(!isManualBattle || !manualEnt || manualEnt.hp<=0 || mag<0.4) return;
+            const ts=performance.now();
+            if(ts<manualEnt.frozenUntil || ts-manualEnt.lastSkillTime<manualEnt.role.skillInterval) return;
+            manualEnt.lastSkillTime=ts;
+            fireSkill(manualEnt, Math.atan2(fy,fx));
+        }
+        function resetJoysticks(){
+            [joyMove,joySkill].forEach(v=>{ v.x=0; v.y=0; v.active=false; v._touch=false; });
+            document.querySelectorAll('#joyMoveWrap .joy-knob, #joySkillWrap .joy-knob').forEach(k=>k.style.transform='translate(-50%,-50%)');
+            const cd=document.getElementById('joyCd'); if(cd) cd.style.background='';
+        }
+        function updateSkillCooldown(ts){
+            const cd=document.getElementById('joyCd'); if(!cd || !isManualBattle || !manualEnt) return;
+            const interval=manualEnt.role.skillInterval||1;
+            const frac=Math.min(1,Math.max(0,(interval-(ts-manualEnt.lastSkillTime))/interval));
+            if(frac<=0.01){ cd.style.background=''; }
+            else{ const pct=(frac*100).toFixed(1); cd.style.background='conic-gradient(rgba(0,0,0,0.62) '+pct+'%, rgba(0,0,0,0) '+pct+'%)'; }
+        }
+        function initJoysticks(){ setupJoystick('joyMove',joyMove); setupJoystick('joySkill',joySkill,tryManualSkill); }
+
+        // ============ 电脑端检测（无触屏 → 隐藏摇杆，用键盘+鼠标） ============
+        const IS_PC=!(('ontouchstart' in window)||navigator.maxTouchPoints>0);
+        const mouseAim={x:1,y:0,on:false};
+
+        // ============ 键盘控制（手动对战） ============
+        const kb={w:false,a:false,s:false,d:false,up:false,left:false,down:false,right:false,i:false,j:false,k:false,l:false};
+        function kbVec(){
+            let mx=0,my=0;
+            if(kb.w) my-=1; if(kb.s) my+=1; if(kb.a) mx-=1; if(kb.d) mx+=1;
+            if(kb.up) my-=1; if(kb.down) my+=1; if(kb.left) mx-=1; if(kb.right) mx+=1;
+            const m=Math.hypot(mx,my); if(m>1){ mx/=m; my/=m; }
+            let sx=0,sy=0;
+            if(kb.i) sy-=1; if(kb.k) sy+=1; if(kb.j) sx-=1; if(kb.l) sx+=1;
+            const s=Math.hypot(sx,sy); if(s>1){ sx/=s; sy/=s; }
+            return {mx,my,sx,sy};
+        }
+        function kbSync(){
+            if(!isManualBattle) return;
+            const v=kbVec();
+            if(v.mx||v.my){ joyMove.x=v.mx; joyMove.y=v.my; joyMove.active=true; }
+            else if(!joyMove._touch){ joyMove.x=0; joyMove.y=0; joyMove.active=false; }
+            if(v.sx||v.sy){ joySkill.x=v.sx; joySkill.y=v.sy; joySkill.active=true; }
+            else if(!joySkill._touch){ joySkill.x=0; joySkill.y=0; joySkill.active=false; }
+            if(IS_PC&&mouseAim.on&&manualEnt&&manualEnt.hp>0&&!(v.sx||v.sy)){ joySkill.x=mouseAim.x; joySkill.y=mouseAim.y; joySkill.active=true; }
+        }
+        setInterval(kbSync, 16);
+        document.addEventListener('keydown',(ev)=>{
+            if(!isManualBattle) return;
+            const k=ev.key.toLowerCase();
+            if(k==='w')kb.w=true; else if(k==='a')kb.a=true; else if(k==='s')kb.s=true; else if(k==='d')kb.d=true;
+            else if(k==='arrowup')kb.up=true; else if(k==='arrowdown')kb.down=true; else if(k==='arrowleft')kb.left=true; else if(k==='arrowright')kb.right=true;
+            else if(k==='i')kb.i=true; else if(k==='j')kb.j=true; else if(k==='k')kb.k=true; else if(k==='l')kb.l=true;
+            else if(k===' '||k==='spacebar'){ ev.preventDefault(); tryManualSkill(joySkill.x,joySkill.y); return; }
+            else return;
+            if(k.startsWith('arrow')||k===' ') ev.preventDefault();
+        });
+        document.addEventListener('keyup',(ev)=>{
+            const k=ev.key.toLowerCase();
+            if(k==='w')kb.w=false; else if(k==='a')kb.a=false; else if(k==='s')kb.s=false; else if(k==='d')kb.d=false;
+            else if(k==='arrowup')kb.up=false; else if(k==='arrowdown')kb.down=false; else if(k==='arrowleft')kb.left=false; else if(k==='arrowright')kb.right=false;
+            else if(k==='i')kb.i=false; else if(k==='j')kb.j=false; else if(k==='k')kb.k=false; else if(k==='l')kb.l=false;
+        });
+
+        // ============ 电脑端：鼠标瞄准 + 左键发射 ============
+        const battleCv=document.getElementById('battleCanvas');
+        if(battleCv){
+            battleCv.addEventListener('mousemove',(ev)=>{
+                if(!IS_PC||!isManualBattle||!manualEnt||manualEnt.hp<=0) return;
+                const r=battleCv.getBoundingClientRect();
+                const mx=(ev.clientX-r.left)*(battleCv.width/r.width), my=(ev.clientY-r.top)*(battleCv.height/r.height);
+                const dx=mx-manualEnt.x, dy=my-manualEnt.y, d=Math.hypot(dx,dy);
+                if(d>2){ mouseAim.x=dx/d; mouseAim.y=dy/d; mouseAim.on=true; }
+            });
+            battleCv.addEventListener('mouseleave',()=>{ mouseAim.on=false; });
+            battleCv.addEventListener('mousedown',(ev)=>{ if(!IS_PC||!isManualBattle||ev.button!==0) return; if(mouseAim.on) tryManualSkill(mouseAim.x,mouseAim.y); });
+        }
+
+        // ============ 事件绑定 ============
+        document.getElementById('btnStartGame').addEventListener('click',()=>showScreen(document.getElementById('screenMode')));
+        document.getElementById('btnShowRules').addEventListener('click',()=>{ const m=document.getElementById('modalRules'); m.classList.remove('active'); void m.offsetWidth; m.classList.add('active'); });
+        document.getElementById('btnSettings').addEventListener('click',()=>showScreen(document.getElementById('screenSettings')));
+        document.getElementById('btnSettingsBack').addEventListener('click',()=>showScreen(document.getElementById('screenMenu')));
+        document.getElementById('btnAbout').addEventListener('click',()=>showScreen(document.getElementById('screenAbout')));
+        document.getElementById('btnAboutBack').addEventListener('click',()=>showScreen(document.getElementById('screenSettings')));
+        document.getElementById('btnDevSetting').addEventListener('click',()=>showScreen(document.getElementById('screenDev')));
+        document.getElementById('btnDevBack').addEventListener('click',()=>showScreen(document.getElementById('screenSettings')));
+        document.getElementById('btnDevToggle').addEventListener('click',()=>{ const btn=document.getElementById('btnDevToggle'); const on=!btn.classList.contains('on'); try{ if(on) localStorage.setItem('lightUnlocked','1'); else{ localStorage.removeItem('lightUnlocked'); localStorage.removeItem('moreAnim'); localStorage.removeItem('hideNames'); localStorage.removeItem('storyMode'); } }catch(e){} sfxClick(); applyLightSettings(); if(!on) showScreen(document.getElementById('screenSettings')); });
+        document.getElementById('btnStoryToggle').addEventListener('click',()=>{ const on=!document.getElementById('btnStoryToggle').classList.contains('on'); try{ localStorage.setItem('storyMode',on?'1':'0'); }catch(e){} sfxClick(); applyLightSettings(); });
+        document.getElementById('btnJoySetting').addEventListener('click',()=>{ renderJoyPreview(); showScreen(document.getElementById('screenJoySettings')); });
+        document.getElementById('btnJoyBack').addEventListener('click',()=>{ showScreen(document.getElementById('screenSettings')); });
+        document.getElementById('btnJoyReset').addEventListener('click',()=>{ joyLayout=JSON.parse(JSON.stringify(DEFAULT_JOY_LAYOUT)); saveJoyLayout(); applyJoyLayout(); renderJoyPreview(); sfxClick(); });
+        document.getElementById('btnStoryMode').addEventListener('click',()=>{ showScreen(document.getElementById('screenStory')); requestAnimationFrame(()=>requestAnimationFrame(buildStoryMap)); });
+        document.getElementById('btnStoryBack').addEventListener('click',goToModeSelect);
+        document.getElementById('btnStoryTestBack').addEventListener('click',()=>showScreen(document.getElementById('screenStory')));
+        // ---- 序章剧情事件 ----
+        document.getElementById('dlgBox').addEventListener('click',()=>{ onDlgTap(); });
+        document.getElementById('btnIvAccept').addEventListener('click',()=>{ sfxClick(); startStoryDuel(); });
+        document.getElementById('btnIvRefuse').addEventListener('click',()=>{ sfxClick(); fqScoldThen(0); });
+        document.getElementById('btnSceneQuit').addEventListener('click',()=>{ clearProTimers(); blinkOverlay.classList.remove('blink-close','blink-open','blink-alarm'); document.getElementById('screenStoryScene').classList.remove('over-lid'); scoldStars=-1; showScreen(document.getElementById('screenStory')); requestAnimationFrame(()=>requestAnimationFrame(buildStoryMap)); });
+        document.getElementById('btnSrRetry').addEventListener('click',()=>{ sfxClick(); if(srStars===0){ scoldStars=-1; showScreen(document.getElementById('screenStoryScene')); showDuelChoice(); } else startStoryDuel(); });
+        document.getElementById('btnSrMap').addEventListener('click',()=>{ sfxClick(); clearProTimers(); blinkOverlay.classList.remove('blink-close','blink-open','blink-alarm'); document.getElementById('screenStoryScene').classList.remove('over-lid'); showScreen(document.getElementById('screenStory')); requestAnimationFrame(()=>requestAnimationFrame(buildStoryMap)); });
+        document.getElementById('btnAnimToggle').addEventListener('click',()=>{ const on=!document.getElementById('btnAnimToggle').classList.contains('on'); try{ localStorage.setItem('moreAnim',on?'1':'0'); }catch(e){} sfxClick(); applyLightSettings(); });
+        document.getElementById('btnHideNameToggle').addEventListener('click',()=>{ const on=!document.getElementById('btnHideNameToggle').classList.contains('on'); try{ localStorage.setItem('hideNames',on?'1':'0'); }catch(e){} sfxClick(); applyLightSettings(); });
+        document.getElementById('btnLightSetting').addEventListener('click',()=>showScreen(document.getElementById('screenLight')));
+        document.getElementById('btnLightBack').addEventListener('click',()=>showScreen(document.getElementById('screenDev')));
+        document.getElementById('btnLightToggle').addEventListener('click',()=>{ lightOn=!lightOn; try{ localStorage.setItem('lightEnabled',lightOn?'1':'0'); }catch(e){} sfxClick(); applyLightSettings(); });
+        document.getElementById('aboutVersion').textContent='版本 '+document.getElementById('versionLabel').textContent;
+        // ============ 隐藏入口密码（FNV-1a 双轮加盐哈希，明文不落代码；以后加入口只需在 SECRETS 加一行 {h:哈希, fn:动作}） ============
+        function fnv1a(s){ let h=0x811c9dc5; for(let i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,0x01000193); } return (h>>>0).toString(16).padStart(8,'0'); }
+        function secretHash(s){ const a=fnv1a('kpdj_'+s+'_13!'); return a+fnv1a(a+'_13!'+s+'kpdj_'); }
+        const SECRETS=[
+            { h:'0815c6a90af4904a', fn:()=>{ try{ localStorage.setItem('lightUnlocked','1'); }catch(e){} applyLightSettings(); showScreen(document.getElementById('screenDev')); } } // 开发者选项
+        ];
+        const modalPwd=document.getElementById('modalPwd'), pwdInput=document.getElementById('pwdInput'), pwdErr=document.getElementById('pwdErr');
+        function openPwdModal(){ pwdInput.value=''; pwdErr.textContent=''; pwdInput.classList.remove('shake'); modalPwd.classList.remove('active'); void modalPwd.offsetWidth; modalPwd.classList.add('active'); setTimeout(()=>pwdInput.focus(),250); }
+        function closePwdModal(){ modalPwd.classList.remove('active'); pwdInput.value=''; pwdErr.textContent=''; pwdInput.classList.remove('shake'); }
+        const authOkOverlay=document.getElementById('authOkOverlay');
+        let authBusy=false, authTimer=0;
+        function showAuthGranted(onDone){
+            if(authBusy) return; authBusy=true;
+            authOkOverlay.classList.remove('leave','show'); void authOkOverlay.offsetWidth;
+            authOkOverlay.classList.add('show');
+            playSound(660,'sine',0.1,0.2,990);
+            setTimeout(()=>playSound(990,'sine',0.14,0.2,1320),180);
+            setTimeout(()=>playSound(1320,'triangle',0.18,0.18),400);
+            clearTimeout(authTimer);
+            authTimer=setTimeout(()=>{
+                authOkOverlay.classList.add('leave');
+                setTimeout(()=>{
+                    authOkOverlay.classList.remove('show','leave');
+                    authBusy=false;
+                    onDone&&onDone();
+                },290);
+            },1180);
+        }
+        function submitPwd(){
+            if(authBusy) return;
+            const hit=SECRETS.find(s=>secretHash(pwdInput.value.trim())===s.h);
+            if(hit){
+                closePwdModal();
+                showAuthGranted(()=>hit.fn());
+            }else{
+                pwdErr.textContent='密码错误';
+                pwdInput.classList.remove('shake'); void pwdInput.offsetWidth; pwdInput.classList.add('shake');
+                playSound(140,'sawtooth',0.18,0.12,80);
+                pwdInput.value=''; pwdInput.focus();
+            }
+        }
+        document.getElementById('btnPwdOk').addEventListener('click',submitPwd);
+        document.getElementById('btnPwdCancel').addEventListener('click',closePwdModal);
+        modalPwd.addEventListener('click',function(e){ if(e.target===this) closePwdModal(); });
+        pwdInput.addEventListener('keydown',(e)=>{ if(e.key==='Enter'){ e.preventDefault(); submitPwd(); } });
+        let aboutClicks=0;
+        document.getElementById('aboutVersion').addEventListener('click',()=>{
+            aboutClicks++;
+            if(aboutClicks>=10){
+                aboutClicks=0;
+                let unlocked=false; try{ unlocked=localStorage.getItem('lightUnlocked')==='1'; }catch(e){}
+                if(unlocked){ sfxClick(); showScreen(document.getElementById('screenDev')); }
+                else openPwdModal();
+            } else { sfxClick(); }
+        });
+        document.getElementById('btnCloseRules').addEventListener('click',()=>document.getElementById('modalRules').classList.remove('active'));
+        document.getElementById('modalRules').addEventListener('click',function(e){ if(e.target===this) this.classList.remove('active'); });
+        document.getElementById('btnFreeMode').addEventListener('click',startFreeMode);
+        document.getElementById('btnDualMode').addEventListener('click',startDualMode);
+        document.getElementById('btnBRMode').addEventListener('click',startBRMode);
+        document.getElementById('btnManualMode').addEventListener('click',startManualMode);
+        document.getElementById('btnManualBack').addEventListener('click',goToModeSelect);
+        document.getElementById('btnManualReset').addEventListener('click',startManualMode);
+        document.getElementById('btnBackToMenu').addEventListener('click',goToMenu);
+        document.getElementById('btnVictoryRematch').addEventListener('click',()=>rematch());
+        document.getElementById('btnVictoryBack').addEventListener('click',()=>{ stopBattle(); goToMenu(); });
+        document.getElementById('btnBackToMode').addEventListener('click',goToModeSelect);
+        document.getElementById('btnBackToMode2').addEventListener('click',goToModeSelect);
+        document.getElementById('btnBackToMode3').addEventListener('click',goToModeSelect);
+        document.getElementById('btnFreeReset').addEventListener('click',()=>{ freeSelected={p1:null,p2:null}; updateFreeSelection(); });
+        document.getElementById('btnStartBR').addEventListener('click',startBRBattle);
+        document.getElementById('btnStartDualBattle').addEventListener('click',startDualBattle);
+        document.getElementById('btnEndBattle').addEventListener('click',endBattle);
+        document.getElementById('btnRematch').addEventListener('click',rematch);
+        document.getElementById('drawCard1').addEventListener('click',()=>drawCard(1));
+        document.getElementById('drawCard2').addEventListener('click',()=>drawCard(2));
+
+        // ============ 初始化 ============
+        (function createBg(){ const c=document.getElementById('bgParticles'); for(let i=0;i<25;i++){ const d=document.createElement('div'); d.className='bg-particle'; d.style.width=d.style.height=(2+Math.random()*3)+'px'; d.style.left=Math.random()*100+'%'; d.style.animationDuration=(5+Math.random()*10)+'s'; d.style.animationDelay=Math.random()*8+'s'; d.style.background=['#f0c060','#ff6b8a','#7dbfff','#c8a0ff','#00aaff'][Math.floor(Math.random()*5)]; c.appendChild(d); } })();
+        initLightSense();
+        initJoysticks();
+        loadJoyLayout();
+        initJoySettings();
+        canvas=document.getElementById('battleCanvas'); ctx=canvas.getContext('2d'); arenaSize=Math.floor(Math.min(window.innerWidth*0.9,380)); canvas.width=arenaSize; canvas.height=arenaSize;
+        window.addEventListener('resize',()=>{ applyJoyLayout(); if(battleActive){ const s=Math.floor(Math.min(window.innerWidth*0.9,380)); if(s!==arenaSize){ const r=s/arenaSize; arenaSize=s; canvas.width=arenaSize; canvas.height=arenaSize; entities.forEach(e=>{e.x*=r;e.y*=r;}); projectiles.forEach(p=>{p.x*=r;p.y*=r;}); } } });
+    })();
+</script>
+</body>
+</html>
