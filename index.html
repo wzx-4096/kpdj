@@ -18,7 +18,7 @@
         <button class="btn btn-sm" id="btnSettings">⚙️ 设置</button>
         <button class="btn btn-info btn-sm" id="btnFullscreen">⛶ 全屏</button>
         <button class="btn btn-info btn-sm" id="btnSupport">💬 客服</button>
-        <div style="color:#667;font-size:10px;" id="versionLabel">v9.1 · 刘焜强化</div>
+        <div style="color:#667;font-size:10px;" id="versionLabel">v9.1 · <span data-role="liukun">刘焜</span>强化</div>
     </div>
     <div class="screen" id="screenSupport">
         <div class="game-title" style="font-size:20px;">💬 在线客服</div>
@@ -68,6 +68,10 @@
                 <button id="btnHideNameToggle" class="light-toggle" type="button"><span class="knob"></span></button>
             </div>
             <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 2px 4px;border-top:1px solid rgba(255,255,255,0.12);margin-top:8px;">
+                <span style="color:#fff;font-size:13px;font-weight:700;">🕶 隐藏角色·<span data-role="zhuhaoyu">朱皓宇</span></span>
+                <button id="btnHideZhuToggle" class="light-toggle" type="button"><span class="knob"></span></button>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 2px 4px;border-top:1px solid rgba(255,255,255,0.12);margin-top:8px;">
                 <span style="color:#fff;font-size:13px;font-weight:700;">🎵 背景音乐</span>
                 <button id="btnMusicToggle" class="light-toggle" type="button"><span class="knob"></span></button>
             </div>
@@ -108,7 +112,6 @@
             <div style="color:#ccd;font-size:11px;line-height:1.9;text-align:left;">
                 <div>😋 <b><span data-role="liukun">刘焜</span>强化</b>：吃食物回血从2点提升到5点，干饭人奶量翻倍多</div>
                 <div>🧱 <b>工程化重构</b>：网页版拆分为标准 Node.js + Express 前后端工程，前端 HTML/CSS/JS 分离，后端新增存档/排行接口，玩法完全不变</div>
-                <div>🏫 <b>故事第1关·教室风波</b>：木琴一脚把李嘉泽踢进教室，上课偷聊三角洲被李晨雨抓个正着，和同桌刘一鸣联手2v1！课桌椅挡路、弹道会反弹，队友阵亡会扣星</div>
                 <div>🕹️ <b>摇杆设置全屏化</b>：键位调整改为全屏预览，所见即所得，拖动更精准</div>
                 <div>📖 <b>故事模式正式上线</b>：闯关制故事地图，逐关解锁，序章开启父子间的第一场对决</div>
                 <div>🎴 <b>三合一模式正式上线</b>：三种玩法一键融合，设置里可开关</div>
@@ -210,7 +213,7 @@
             </div>
             <div class="slippers">🥿🥿</div>
             <i class="dust d1"></i><i class="dust d2"></i><i class="dust d3"></i><i class="dust d4"></i>
-            <div class="room-actor" id="actorLz" data-key="lz"><span class="ra-emoji" id="emojiLz">😴</span><span class="ra-tag" id="tagLz">李嘉泽</span><div class="zzz"><span>z</span><span>Z</span><span>z</span></div></div>
+            <div class="room-actor" id="actorLz" data-key="lz"><span class="ra-emoji" id="emojiLz">😴</span><span class="ra-tag" id="tagLz" data-role="lijiaze">李嘉泽</span><div class="zzz"><span>z</span><span>Z</span><span>z</span></div></div>
             <div class="actor-slot off" id="slotFq"><div class="room-actor" id="actorFq" data-key="fq"><span class="ra-emoji" id="emojiFq">👨</span><span class="ra-tag">浮琴</span></div></div>
             <div class="actor-slot off" id="slotMq"><div class="room-actor" id="actorMq" data-key="mq"><span class="ra-emoji" id="emojiMq">👩</span><span class="ra-tag">木琴</span></div></div>
         </div>
@@ -221,7 +224,7 @@
             <div class="cls-board">
                 <span class="cls-chalk1">上课啦！</span>
                 <span class="cls-chalk2">别说话 · 认真听讲</span>
-                <span class="cls-chalk3">值日：李嘉泽</span>
+                <span class="cls-chalk3">值日：<span data-role="lijiaze">李嘉泽</span></span>
                 <span class="cls-tray"></span>
             </div>
             <div class="cls-clock">🕐</div>
@@ -277,7 +280,7 @@
         <div class="di-arena di-shake">
             <div class="di-card di-left"><div class="di-emoji">🤬</div><div class="di-nm">浮琴</div><div class="di-hp">❤️ 300 · 七匹狼</div></div>
             <div class="di-vs">VS<div class="di-clash" style="position:absolute;left:50%;top:50%;margin:-35px 0 0 -35px;">💥</div></div>
-            <div class="di-card di-right"><div class="di-emoji">😴</div><div class="di-nm">李嘉泽</div><div class="di-hp">❤️ 300 · Z字弹</div></div>
+            <div class="di-card di-right"><div class="di-emoji">😴</div><div class="di-nm" data-role="lijiaze">李嘉泽</div><div class="di-hp">❤️ 300 · Z字弹</div></div>
         </div>
         <div class="di-tag">🤬 父 子 の 决 战 🤬</div>
     </div>
@@ -407,7 +410,7 @@
                 <li><b><span data-role="wangyan">王艳</span>👩‍🏫：</b>弯折腿🦵，冷却3秒，反弹3次，伤害30；副技能📱叫家长：每30秒拿出手机召唤2名家长👨👩（烟雾降临，随机位置），家长随机弹跳，碰到学生撞上扣10血，不会伤到<span data-role="wangyan">王艳</span>。</li>
                 <li><b><span data-role="lijiaze">李嘉泽</span>😴：</b>打鼾Z💤，冷却4秒，3个Z各15伤害。</li>
                 <li><b><span data-role="lichenyu">李晨雨</span>👧：</b>声波🌊，冷却5.5秒，伤害20，无法反弹可穿透；半血后被攻击20%把攻击者记上死亡笔记📓，反伤100。</li>
-                <li><b><span data-role="zhuhaoyu">朱皓宇</span>👦：</b>豪车🚗/金表⌚，冷却4.5秒，随机28或20伤害。</li>
+                <li id="ruleRoleZhu"><b><span data-role="zhuhaoyu">朱皓宇</span>👦：</b>豪车🚗/金表⌚，冷却4.5秒，随机28或20伤害。</li>
                 <li><b><span data-role="dingxiaohua">丁晓华</span>👩‍💻：</b>电脑💻，冷却7秒，时停3秒每秒18血。</li>
                 <li><b><span data-role="renqiuhong">任秋红</span>👩‍🏫：</b>召唤皇帝👑，冷却10秒，上限5个，皇帝近战伤15/血30，50%闪避投射物。</li>
                 <li><b><span data-role="chengxinxin">程梓鑫</span>🧑‍🍳：</b>牛肉饼🍔，冷却5秒，反弹5次消失，敌伤15，自回30。</li>

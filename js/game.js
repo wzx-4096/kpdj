@@ -196,6 +196,10 @@
 
         // ============ 屏蔽真实名字（开发者选项）：角色代号 ============
         const ROLE_ALIASES={ wangyan:'飞腿教官', lijiaze:'呼噜睡侠', lichenyu:'音波使', zhuhaoyu:'豪掷公子', dingxiaohua:'时停程序员', renqiuhong:'唤灵导师', chengxinxin:'弹弹肉饼', zhaolina:'绿叶射手', liuyiming:'米花本尊', liuerming:'米花分身·贰', liusanming:'米花分身·叁', liukun:'干饭狂战' };
+        // 真名表：HTML 静态文本在发布版里被烘焙成代号，关闭屏蔽时的还原只能靠真名（不能读 el.textContent）。
+        // 这里由 ROLES 运行时填充，不在源码里再写一份真名，避免发布版多出真名明文残留。
+        const ROLE_REAL={};
+        ROLES.forEach(r=>{ if(ROLE_ALIASES[r.id]) ROLE_REAL[r.id]=r.name; (r.spawnRoles||[]).forEach(s=>{ if(ROLE_ALIASES[s.id]) ROLE_REAL[s.id]=s.name; }); });
         // 真名常量：屏蔽/还原"13班"字样（发布版里 HTML 文本被烘焙成代号，还原只能靠这里的常量）
         const CLS_REAL={'🃏 卡牌对决':'🃏 初13班','卡牌对决':'13班卡牌对决'};
         const TITLE_REAL='初13班卡牌对决';
@@ -204,14 +208,24 @@
         function syncHiddenNames(){
             document.querySelectorAll('[data-role]').forEach(el=>{
                 const id=el.dataset.role;
-                if(!el.dataset.real) el.dataset.real=el.textContent;
-                el.textContent=(hideNames&&ROLE_ALIASES[id])?ROLE_ALIASES[id]:el.dataset.real;
+                el.textContent=(hideNames&&ROLE_ALIASES[id])?ROLE_ALIASES[id]:(ROLE_REAL[id]||el.dataset.real||el.textContent);
             });
             document.querySelectorAll('[data-cls]').forEach(el=>{
                 el.dataset.real=CLS_REAL[el.dataset.cls]||el.dataset.real||el.textContent;
                 el.textContent=hideNames?el.dataset.cls:el.dataset.real;
             });
             document.title=hideNames?'卡牌对决':TITLE_REAL;
+        }
+
+        // ============ 隐藏角色（开发者选项）：默认隐藏 朱皓宇，可在开发者选项里开关 ============
+        let zhHidden=true;
+        function isRoleHidden(id){ return zhHidden && id==='zhuhaoyu'; }
+        function visibleRoles(){ return ROLES.filter(r=>!isRoleHidden(r.id)); }
+        function syncHiddenRoleUI(){
+            let zh='1'; try{ zh=localStorage.getItem('hideZhu')||'1'; }catch(e){}
+            zhHidden=zh!=='0';
+            const zt=document.getElementById('btnHideZhuToggle'); if(zt) zt.classList.toggle('on',zhHidden);
+            const rz=document.getElementById('ruleRoleZhu'); if(rz) rz.style.display=zhHidden?'none':'';
         }
 
         // ============ 全局状态 ============
@@ -263,7 +277,7 @@
         function buildRoleCards(listEl, onPick){
             if(!listEl) return;
             listEl.innerHTML='';
-            ROLES.forEach(role=>{
+            visibleRoles().forEach(role=>{
                 const card=document.createElement('div');
                 card.className='card-display'; card.style.cssText='cursor:pointer;width:104px;flex:none;';
                 card.dataset.roleId=role.id;
@@ -419,7 +433,7 @@
             if(lv.made){
                 // 已制作关卡：显示介绍 + 开始游戏
                 const allyTxt=(lv.allies&&lv.allies.length)?('队友：'+lv.allies.map(id=>rn(RB(id))).join('、')+'。'):'';
-                document.getElementById('storyTestIntro').textContent=allyTxt+'对手：'+lv.foes.map(id=>rn(RB(id))).join('、')+'。'+lv.desc;
+                document.getElementById('storyTestIntro').textContent=allyTxt+'对手：'+lv.foes.map(id=>rn(RB(id))).join('、')+'。'+storyMask(lv.desc);
                 startBtn.style.display='';
             } else {
                 // 未制作关卡：只显示占位提示，无开始按钮
@@ -825,7 +839,7 @@
             const cardEl=document.getElementById(num===1?'drawCard1':'drawCard2');
             const avatarEl=document.getElementById(num===1?'drawAvatar1':'drawAvatar2');
             const nameEl=document.getElementById(num===1?'drawName1':'drawName2');
-            const role=ROLES[Math.floor(Math.random()*ROLES.length)];
+            const pool=visibleRoles(); const role=pool[Math.floor(Math.random()*pool.length)];
             if(avatarEl) avatarEl.textContent=role.avatar; // 提前填充内容，翻过90°后正面才可见
             if(nameEl) nameEl.textContent=rn(role);
             if(cardEl) cardEl.classList.add('flipping');
@@ -873,7 +887,7 @@
         // ============ 三合一（开发者选项：自由/双人/大乱斗融合，扇形卡牌堆选人） ============
         let triPicked=[], triIdx=0, triWheelTs=0, triDrag=null;
         const triCards=new Map();   // 槽位slot → 卡片元素：元素与角色身份绑定持久存在，切换只重排位置（CSS过渡自然衔接）
-        function triRoleAt(k){ const d=ROLES, i=((k%d.length)+d.length)%d.length; return d[i]; }
+        function triRoleAt(k){ const d=visibleRoles(), i=((k%d.length)+d.length)%d.length; return d[i]; }
         function triTf(o){ return 'translate('+(o*46)+'px,'+(Math.abs(o)*9)+'px) rotate('+(o*8)+'deg) scale('+(1-Math.abs(o)*0.07).toFixed(3)+')'; }
         function triNewCard(slot){   // 建一张卡，内容按 slot 对应角色固定，永不改变
             const role=triRoleAt(slot), c=document.createElement('div');
@@ -1933,6 +1947,7 @@
             let hn='1'; try{ hn=localStorage.getItem('hideNames')||'1'; }catch(e){}
             hideNames=hn!=='0';   // 默认屏蔽真实名字，仅开发者选项里可手动关闭
             const ht=document.getElementById('btnHideNameToggle'); if(ht) ht.classList.toggle('on',hideNames);
+            syncHiddenRoleUI();
             let mo='0'; try{ mo=localStorage.getItem('bgmOn')||'0'; }catch(e){}
             musicOn=(mo==='1')&&unlocked;   // 背景音乐：默认关闭，且仅在开发者选项开启时生效
             const mt=document.getElementById('btnMusicToggle'); if(mt) mt.classList.toggle('on',musicOn);
@@ -2123,7 +2138,7 @@
         document.getElementById('btnAboutBack').addEventListener('click',()=>showScreen(document.getElementById('screenSettings')));
         document.getElementById('btnDevSetting').addEventListener('click',()=>showScreen(document.getElementById('screenDev')));
         document.getElementById('btnDevBack').addEventListener('click',()=>showScreen(document.getElementById('screenSettings')));
-        document.getElementById('btnDevToggle').addEventListener('click',()=>{ const btn=document.getElementById('btnDevToggle'); const on=!btn.classList.contains('on'); try{ if(on) localStorage.setItem('lightUnlocked','1'); else{ localStorage.removeItem('lightUnlocked'); localStorage.removeItem('moreAnim'); localStorage.removeItem('hideNames'); localStorage.removeItem('bgmOn'); } }catch(e){} sfxClick(); applyLightSettings(); if(!on) showScreen(document.getElementById('screenSettings')); });
+        document.getElementById('btnDevToggle').addEventListener('click',()=>{ const btn=document.getElementById('btnDevToggle'); const on=!btn.classList.contains('on'); try{ if(on) localStorage.setItem('lightUnlocked','1'); else{ localStorage.removeItem('lightUnlocked'); localStorage.removeItem('moreAnim'); localStorage.removeItem('hideNames'); localStorage.removeItem('hideZhu'); localStorage.removeItem('bgmOn'); } }catch(e){} sfxClick(); applyLightSettings(); if(!on) showScreen(document.getElementById('screenSettings')); });
         document.getElementById('btnJoySetting').addEventListener('click',()=>{ renderJoyPreview(); showScreen(document.getElementById('screenJoySettings')); });
         document.getElementById('btnJoyBack').addEventListener('click',()=>{ showScreen(document.getElementById('screenSettings')); });
         document.getElementById('btnJoyReset').addEventListener('click',()=>{ joyLayout=JSON.parse(JSON.stringify(DEFAULT_JOY_LAYOUT)); saveJoyLayout(); applyJoyLayout(); renderJoyPreview(); sfxClick(); });
@@ -2142,6 +2157,7 @@
         document.getElementById('btnSrMap').addEventListener('click',()=>{ sfxClick(); clearProTimers(); blinkOverlay.classList.remove('blink-close','blink-open','blink-alarm'); document.getElementById('screenStoryScene').classList.remove('over-lid'); showScreen(document.getElementById('screenStory')); requestAnimationFrame(()=>requestAnimationFrame(buildStoryMap)); });
         document.getElementById('btnAnimToggle').addEventListener('click',()=>{ const on=!document.getElementById('btnAnimToggle').classList.contains('on'); try{ localStorage.setItem('moreAnim',on?'1':'0'); }catch(e){} sfxClick(); applyLightSettings(); });
         document.getElementById('btnHideNameToggle').addEventListener('click',()=>{ const on=!document.getElementById('btnHideNameToggle').classList.contains('on'); try{ localStorage.setItem('hideNames',on?'1':'0'); }catch(e){} sfxClick(); applyLightSettings(); });
+        document.getElementById('btnHideZhuToggle').addEventListener('click',()=>{ const on=!document.getElementById('btnHideZhuToggle').classList.contains('on'); try{ localStorage.setItem('hideZhu',on?'1':'0'); }catch(e){} sfxClick(); applyLightSettings(); });
         document.getElementById('btnMusicToggle').addEventListener('click',()=>{ const on=!document.getElementById('btnMusicToggle').classList.contains('on'); try{ localStorage.setItem('bgmOn',on?'1':'0'); }catch(e){} sfxClick(); applyLightSettings(); });
         document.getElementById('btnTriToggle').addEventListener('click',()=>{ const on=!document.getElementById('btnTriToggle').classList.contains('on'); try{ localStorage.setItem('triMode',on?'1':'0'); }catch(e){} sfxClick(); applyLightSettings(); });
         document.getElementById('btnTriMode').addEventListener('click',startTriMode);
