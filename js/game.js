@@ -199,7 +199,7 @@
         // 真名常量：屏蔽/还原"13班"字样（发布版里 HTML 文本被烘焙成代号，还原只能靠这里的常量）
         const CLS_REAL={'🃏 卡牌对决':'🃏 初13班','卡牌对决':'13班卡牌对决'};
         const TITLE_REAL='初13班卡牌对决';
-        let hideNames=false;
+        let hideNames=true;
         function rn(role){ return role && hideNames && ROLE_ALIASES[role.id] ? ROLE_ALIASES[role.id] : (role?role.name:''); }
         function syncHiddenNames(){
             document.querySelectorAll('[data-role]').forEach(el=>{
@@ -1930,8 +1930,8 @@
             const animOn=(an==='1')&&unlocked;
             if(animOn) document.documentElement.dataset.anim='1'; else document.documentElement.removeAttribute('data-anim');
             const at=document.getElementById('btnAnimToggle'); if(at) at.classList.toggle('on',animOn);
-            let hn='0'; try{ hn=localStorage.getItem('hideNames')||'0'; }catch(e){}
-            hideNames=(hn==='1')&&unlocked;
+            let hn='1'; try{ hn=localStorage.getItem('hideNames')||'1'; }catch(e){}
+            hideNames=hn!=='0';   // 默认屏蔽真实名字，仅开发者选项里可手动关闭
             const ht=document.getElementById('btnHideNameToggle'); if(ht) ht.classList.toggle('on',hideNames);
             let mo='0'; try{ mo=localStorage.getItem('bgmOn')||'0'; }catch(e){}
             musicOn=(mo==='1')&&unlocked;   // 背景音乐：默认关闭，且仅在开发者选项开启时生效
