@@ -201,6 +201,14 @@
         @keyframes authSweep { to{ transform:translateX(420%) skewX(-18deg); } }
         #authOkOverlay.leave { animation:authLeave 0.28s ease forwards; }
         @keyframes authLeave { to{ opacity:0; transform:scale(1.06); } }
+        /* ===== 隐藏彩蛋图片弹层 ===== */
+        #secretImgOverlay { position:fixed; inset:0; z-index:120; display:none; align-items:center; justify-content:center; flex-direction:column; gap:14px; background:rgba(0,0,0,0.92); padding:16px; cursor:pointer; }
+        #secretImgOverlay.active { display:flex; animation:secretImgBg 0.25s ease both; }
+        @keyframes secretImgBg { from{ opacity:0; } to{ opacity:1; } }
+        #secretImg { max-width:92vw; max-height:78vh; border-radius:10px; box-shadow:0 16px 48px rgba(0,0,0,0.75); animation:secretImgIn 0.34s cubic-bezier(0.34,1.4,0.64,1) both; }
+        @keyframes secretImgIn { from{ opacity:0; transform:scale(0.84); } to{ opacity:1; transform:scale(1); } }
+        #secretImgTip { color:#ccd; font-size:13px; line-height:1.8; text-align:center; max-width:340px; }
+        #secretImgCloseHint { color:#7d8ab0; font-size:11px; }
         /* ===== 故事模式·序章（卧室剧情） ===== */
         #screenStoryScene { position:fixed; inset:0; z-index:5; height:100vh; height:100dvh; justify-content:flex-start; padding:0; gap:0; overflow:hidden; background:#0d0d1a; }
         .scene-stage { position:relative; flex:1 1 auto; min-height:0; width:100%; max-width:420px; overflow:hidden; }

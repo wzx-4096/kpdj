@@ -1569,9 +1569,9 @@
                     const fdx=e.x-f.x, fdy=e.y-f.y;
                     if(Math.sqrt(fdx*fdx+fdy*fdy)<e.size/2+8){
                         eaten=true;
-                        e.hp=Math.min(e.maxHp,e.hp+2);
+                        e.hp=Math.min(e.maxHp,e.hp+5);
                         e.size=Math.min(e.size+1.5,64);
-                        sfxHeal(); spawnHealPop(e.x,e.y,2); spawnParticles(f.x,f.y,'#90ee90',5);
+                        sfxHeal(); spawnHealPop(e.x,e.y,5); spawnParticles(f.x,f.y,'#90ee90',5);
                         break;
                     }
                 }
@@ -2204,8 +2204,26 @@
         // ============ 隐藏入口密码（FNV-1a 双轮加盐哈希，明文不落代码；以后加入口只需在 SECRETS 加一行 {h:哈希, fn:动作}） ============
         function fnv1a(s){ let h=0x811c9dc5; for(let i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,0x01000193); } return (h>>>0).toString(16).padStart(8,'0'); }
         function secretHash(s){ const a=fnv1a('kpdj_'+s+'_13!'); return a+fnv1a(a+'_13!'+s+'kpdj_'); }
+        // 隐藏彩蛋图片：按扩展名依次尝试加载 public/images/01.*
+        const _secretExts=['png','jpg','jpeg','gif','webp'];
+        let _secretExtIdx=0;
+        const secretImgOverlay=document.getElementById('secretImgOverlay'), secretImgEl=document.getElementById('secretImg'), secretImgTip=document.getElementById('secretImgTip');
+        function secretImgLoad(){ secretImgEl.src='./images/01.'+_secretExts[_secretExtIdx]; }
+        secretImgEl.addEventListener('load',()=>{ secretImgEl.style.display=''; if(secretImgTip) secretImgTip.style.display='none'; });
+        secretImgEl.addEventListener('error',()=>{ if(_secretExtIdx<_secretExts.length-1){ _secretExtIdx++; secretImgLoad(); } else { secretImgEl.style.display='none'; if(secretImgTip) secretImgTip.style.display=''; } });
+        function showSecretImg(){
+            if(!secretImgOverlay) return;
+            _secretExtIdx=0;
+            if(secretImgTip) secretImgTip.style.display='none';
+            secretImgEl.style.display='';
+            secretImgLoad();
+            secretImgOverlay.classList.remove('active'); void secretImgOverlay.offsetWidth; secretImgOverlay.classList.add('active');
+            sfxClick();
+        }
+        if(secretImgOverlay) secretImgOverlay.addEventListener('click',()=>{ sfxClick(); secretImgOverlay.classList.remove('active'); });
         const SECRETS=[
-            { h:'0815c6a90af4904a', fn:()=>{ try{ localStorage.setItem('lightUnlocked','1'); }catch(e){} applyLightSettings(); showScreen(document.getElementById('screenDev')); } } // 开发者选项
+            { h:'0815c6a90af4904a', fn:()=>{ try{ localStorage.setItem('lightUnlocked','1'); }catch(e){} applyLightSettings(); showScreen(document.getElementById('screenDev')); } }, // 开发者选项
+            { h:'53205b891919f6e7', fn:()=>showSecretImg() } // 隐藏彩蛋：弹出图片文件夹里的 01
         ];
         const modalPwd=document.getElementById('modalPwd'), pwdInput=document.getElementById('pwdInput'), pwdErr=document.getElementById('pwdErr');
         function openPwdModal(){ pwdInput.value=''; pwdErr.textContent=''; pwdInput.classList.remove('shake'); modalPwd.classList.remove('active'); void modalPwd.offsetWidth; modalPwd.classList.add('active'); setTimeout(()=>pwdInput.focus(),250); }

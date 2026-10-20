@@ -18,7 +18,7 @@
         <button class="btn btn-sm" id="btnSettings">⚙️ 设置</button>
         <button class="btn btn-info btn-sm" id="btnFullscreen">⛶ 全屏</button>
         <button class="btn btn-info btn-sm" id="btnSupport">💬 客服</button>
-        <div style="color:#667;font-size:10px;" id="versionLabel">v9.0 · 工程重构</div>
+        <div style="color:#667;font-size:10px;" id="versionLabel">v9.1 · 刘焜强化</div>
     </div>
     <div class="screen" id="screenSupport">
         <div class="game-title" style="font-size:20px;">💬 在线客服</div>
@@ -106,6 +106,7 @@
         <div class="modal-box" style="width:90%;max-width:320px;">
             <h3>📝 本次更新</h3>
             <div style="color:#ccd;font-size:11px;line-height:1.9;text-align:left;">
+                <div>😋 <b><span data-role="liukun">刘焜</span>强化</b>：吃食物回血从2点提升到5点，干饭人奶量翻倍多</div>
                 <div>🧱 <b>工程化重构</b>：网页版拆分为标准 Node.js + Express 前后端工程，前端 HTML/CSS/JS 分离，后端新增存档/排行接口，玩法完全不变</div>
                 <div>🏫 <b>故事第1关·教室风波</b>：木琴一脚把李嘉泽踢进教室，上课偷聊三角洲被李晨雨抓个正着，和同桌刘一鸣联手2v1！课桌椅挡路、弹道会反弹，队友阵亡会扣星</div>
                 <div>🕹️ <b>摇杆设置全屏化</b>：键位调整改为全屏预览，所见即所得，拖动更精准</div>
@@ -390,6 +391,11 @@
         <div class="auth-text">身份验证已通过</div>
         <div class="auth-sub">ACCESS GRANTED</div>
     </div>
+    <div id="secretImgOverlay">
+        <img id="secretImg" alt="01">
+        <div id="secretImgTip">🖼️ 图片还没放进来<br>请把名为「01」的图片放入 web/public/images/（支持 png / jpg / jpeg / gif / webp）</div>
+        <div id="secretImgCloseHint">点击任意处关闭</div>
+    </div>
     <div class="modal-overlay" id="modalRules">
         <div class="modal-box">
             <h3>📜 游戏规则</h3>
@@ -407,7 +413,7 @@
                 <li><b><span data-role="chengxinxin">程梓鑫</span>🧑‍🍳：</b>牛肉饼🍔，冷却5秒，反弹5次消失，敌伤15，自回30。</li>
                 <li><b><span data-role="zhaolina">赵丽娜</span>👩‍🏫：</b>菠菜叶🥬，每秒发射，伤害5，死亡后满血复活一次。</li>
                 <li><b><span data-role="liuyiming">刘一鸣</span>🧑‍🎓：</b>鸡米花🍿，冷却3秒，伤害15，开局1秒后分身出<span data-role="liuerming">刘二鸣</span>、<span data-role="liusanming">刘三鸣</span>（各150血）。</li>
-                <li><b><span data-role="liukun">刘焜</span>😋：</b>干饭人，400血初始大体型；场上每5秒生成5个食物🍔（最多共存20个），吃到食物回血2并长大；普通碰撞扣10血；<b>每10秒自动冲锋</b>锁定最近的敌人高速撞过去，撞上扣30血。</li>
+                <li><b><span data-role="liukun">刘焜</span>😋：</b>干饭人，400血初始大体型；场上每5秒生成5个食物🍔（最多共存20个），吃到食物回血5并长大；普通碰撞扣10血；<b>每10秒自动冲锋</b>锁定最近的敌人高速撞过去，撞上扣30血。</li>
                 <li><b>阵营：</b><span data-role="wangyan">王艳</span>、<span data-role="dingxiaohua">丁晓华</span>、<span data-role="renqiuhong">任秋红</span>、<span data-role="zhaolina">赵丽娜</span>为👩‍🏫老师阵营，其余角色为🧑‍🎓学生阵营；<span data-role="wangyan">王艳</span>召唤的家长只攻击学生。</li>
             </ul>
             <button class="btn btn-sm" id="btnCloseRules" style="width:100%;margin-top:8px;">✅ 我知道了</button>
