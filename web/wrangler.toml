@@ -1,0 +1,17 @@
+# ============ Cloudflare Pages 项目配置 ============
+# 前端静态目录：dist（npm run build 产出的混淆发布版，真名已烘焙成代号）
+#   → 构建命令：npm run build；输出目录：dist；根目录：web
+# API：functions/api/[[path]].js → /api/*
+name = "kpdj"
+compatibility_date = "2026-10-23"
+pages_build_output_dir = "dist"
+
+# D1 绑定：建库后把 database_id 换成 wrangler d1 create 返回的 ID
+[[d1_databases]]
+binding = "DB"
+database_name = "kpdj-db"
+database_id = "01ce5695-232f-4c3a-933d-bcb22877f8f3"
+
+# 两个密钥不要写在这里，用控制台或命令设置：
+#   wrangler pages secret put SESSION_SECRET --project-name kpdj
+#   wrangler pages secret put ADMIN_PASS_HASH  --project-name kpdj

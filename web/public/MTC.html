@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>MTC · 管理后台</title>
+<style>
+    * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+    body { min-height:100vh; min-height:100dvh; background:radial-gradient(circle at 50% 0%,#1b2340 0%,#0d0d1a 60%); color:#e8ecff; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif; display:flex; align-items:center; justify-content:center; padding:20px; }
+    .card { width:100%; max-width:460px; background:rgba(20,22,40,0.92); border:2px solid rgba(240,192,96,0.7); border-radius:16px; padding:20px; box-shadow:0 0 50px rgba(0,0,0,0.7); }
+    h1 { font-size:20px; text-align:center; color:#f0c060; letter-spacing:1px; margin-bottom:6px; }
+    .sub { font-size:11px; color:#8a93b8; text-align:center; margin-bottom:16px; }
+    input { width:100%; padding:12px 14px; font-size:16px; border-radius:10px; border:2px solid rgba(255,255,255,0.18); background:#0f1020; color:#fff; outline:none; }
+    input:focus { border-color:#f0c060; box-shadow:0 0 14px rgba(240,192,96,0.35); }
+    button { cursor:pointer; font-size:14px; font-weight:800; border-radius:10px; border:2px solid rgba(255,255,255,0.18); background:rgba(255,255,255,0.08); color:#fff; padding:10px 16px; transition:transform 0.12s, background 0.2s, border-color 0.2s; }
+    button:hover { background:rgba(255,255,255,0.14); }
+    button:active { transform:scale(0.97); }
+    button:disabled { opacity:0.5; cursor:not-allowed; }
+    .primary { width:100%; margin-top:12px; background:linear-gradient(135deg,#3fae5c,#2c8043); border-color:#5fd47e; }
+    .danger { background:rgba(231,76,60,0.18); border-color:#e74c3c; color:#ff9a8e; padding:6px 12px; font-size:12px; }
+    .err { color:#ff7a7a; font-size:12px; min-height:16px; margin-top:8px; text-align:center; }
+    @keyframes shake { 0%,100% { transform:translateX(0); } 25% { transform:translateX(-6px); } 75% { transform:translateX(6px); } }
+    input.shake { animation:shake 0.4s; border-color:#e74c3c; }
+    .bar { display:flex; align-items:center; gap:10px; margin-bottom:12px; }
+    .bar .count { flex:1; font-size:12px; color:#9aa6d0; }
+    .list { max-height:56vh; overflow-y:auto; border-radius:10px; border:1px solid rgba(255,255,255,0.12); }
+    .row { display:flex; align-items:center; gap:10px; padding:10px 12px; border-bottom:1px solid rgba(255,255,255,0.07); }
+    .row:last-child { border-bottom:none; }
+    .row .idx { width:28px; flex:0 0 28px; color:#66739c; font-size:11px; text-align:right; }
+    .row .info { flex:1; min-width:0; }
+    .row .name { font-size:14px; font-weight:800; color:#fff; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .row .meta { font-size:10px; color:#7d8ab0; margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .empty { padding:28px 12px; text-align:center; color:#7d8ab0; font-size:12px; }
+    .foot { display:flex; gap:8px; margin-top:14px; }
+    .foot button { flex:1; }
+    .hidden { display:none !important; }
+</style>
+</head>
+<body>
+<div class="card">
+    <h1>🛠 MTC 管理后台</h1>
+    <div class="sub">管理员入口 · 与玩家账号完全独立</div>
+
+    <!-- 登录 -->
+    <div id="loginView">
+        <input id="pwd" type="password" placeholder="管理员密码" autocomplete="current-password">
+        <button class="primary" id="btnLogin" type="button">登录</button>
+        <div class="err" id="loginErr"></div>
+    </div>
+
+    <!-- 玩家列表 -->
+    <div id="adminView" class="hidden">
+        <div class="bar">
+            <span class="count" id="count">共 0 名玩家</span>
+            <button id="btnRefresh" type="button">刷新</button>
+            <button class="danger" id="btnLogout" type="button">退出</button>
+        </div>
+        <div class="list" id="list"><div class="empty">加载中…</div></div>
+        <div class="foot"><button id="btnBack" type="button">← 返回游戏</button></div>
+        <div class="err" id="adminErr"></div>
+    </div>
+</div>
+
+<script>
+(function () {
+    'use strict';
+    var API = '/api';
+    var TOKEN_KEY = 'mtcAdminToken';
+    var token = '';
+    try { token = sessionStorage.getItem(TOKEN_KEY) || ''; } catch (e) { token = ''; }
+
+    var loginView = document.getElementById('loginView');
+    var adminView = document.getElementById('adminView');
+    var pwd = document.getElementById('pwd');
+    var loginErr = document.getElementById('loginErr');
+    var adminErr = document.getElementById('adminErr');
+    var list = document.getElementById('list');
+    var count = document.getElementById('count');
+    var btnLogin = document.getElementById('btnLogin');
+
+    function saveToken(t) {
+        token = t || '';
+        try { if (token) sessionStorage.setItem(TOKEN_KEY, token); else sessionStorage.removeItem(TOKEN_KEY); } catch (e) {}
+    }
+
+    function api(path, opts) {
+        opts = opts || {};
+        var headers = { 'content-type': 'application/json' };
+        if (token) headers.authorization = 'Bearer ' + token;
+        return fetch(API + path, {
+            method: opts.method || 'GET',
+            headers: headers,
+            body: opts.body == null ? undefined : JSON.stringify(opts.body)
+        }).then(function (res) {
+            return res.json().catch(function () { return null; }).then(function (data) {
+                if (!res.ok) {
+                    var msg = (data && data.error && data.error.message) || ('请求失败 ' + res.status);
+                    var err = new Error(msg);
+                    err.status = res.status;
+                    throw err;
+                }
+                return data || {};
+            });
+        });
+    }
+
+    function fmtTime(sec) {
+        var d = new Date(Number(sec) * 1000);
+        if (isNaN(d.getTime())) return '—';
+        var p = function (n) { return n < 10 ? '0' + n : '' + n; };
+        return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+    }
+
+    function showLogin(msg) {
+        saveToken('');
+        adminView.classList.add('hidden');
+        loginView.classList.remove('hidden');
+        loginErr.textContent = msg || '';
+        pwd.value = '';
+        pwd.focus();
+    }
+
+    function showAdmin() {
+        loginView.classList.add('hidden');
+        adminView.classList.remove('hidden');
+        adminErr.textContent = '';
+        loadPlayers();
+    }
+
+    function loadPlayers() {
+        adminErr.textContent = '';
+        list.innerHTML = '';
+        var loading = document.createElement('div');
+        loading.className = 'empty';
+        loading.textContent = '加载中…';
+        list.appendChild(loading);
+        api('/admin/players?limit=500').then(function (data) {
+            renderPlayers(data.players || [], data.total || 0);
+        }).catch(function (e) {
+            list.innerHTML = '';
+            var box = document.createElement('div');
+            box.className = 'empty';
+            box.textContent = e.message;
+            list.appendChild(box);
+            if (e.status === 401) showLogin('登录已失效，请重新输入管理员密码');
+        });
+    }
+
+    function renderPlayers(players, total) {
+        count.textContent = '共 ' + total + ' 名玩家' + (players.length < total ? '（显示最近 ' + players.length + ' 名）' : '');
+        list.innerHTML = '';
+        if (!players.length) {
+            var empty = document.createElement('div');
+            empty.className = 'empty';
+            empty.textContent = '还没有注册玩家';
+            list.appendChild(empty);
+            return;
+        }
+        players.forEach(function (p, i) {
+            var row = document.createElement('div');
+            row.className = 'row';
+
+            var idx = document.createElement('div');
+            idx.className = 'idx';
+            idx.textContent = (i + 1);
+            row.appendChild(idx);
+
+            var info = document.createElement('div');
+            info.className = 'info';
+            var name = document.createElement('div');
+            name.className = 'name';
+            name.textContent = p.username;                 // 用 textContent，防止账号名注入 HTML
+            var meta = document.createElement('div');
+            meta.className = 'meta';
+            meta.textContent = p.pid + ' · 注册 ' + fmtTime(p.created_at);
+            info.appendChild(name);
+            info.appendChild(meta);
+            row.appendChild(info);
+
+            var del = document.createElement('button');
+            del.className = 'danger';
+            del.type = 'button';
+            del.textContent = '删除';
+            del.addEventListener('click', function () { removePlayer(p); });
+            row.appendChild(del);
+
+            list.appendChild(row);
+        });
+    }
+
+    function removePlayer(p) {
+        if (!confirm('确定删除玩家「' + p.username + '」？\n删除后该账号无法再登录，数据不可恢复。')) return;
+        adminErr.textContent = '正在删除…';
+        api('/admin/players/' + encodeURIComponent(p.pid), { method: 'DELETE' }).then(function () {
+            adminErr.textContent = '';
+            loadPlayers();
+        }).catch(function (e) {
+            adminErr.textContent = e.message;
+            if (e.status === 401) showLogin('登录已失效，请重新输入管理员密码');
+        });
+    }
+
+    btnLogin.addEventListener('click', function () {
+        var password = pwd.value;
+        if (!password) { loginErr.textContent = '请输入管理员密码'; return; }
+        btnLogin.disabled = true;
+        loginErr.textContent = '';
+        api('/admin/login', { method: 'POST', body: { password: password } }).then(function (data) {
+            saveToken(data.token);
+            btnLogin.disabled = false;
+            showAdmin();
+        }).catch(function (e) {
+            btnLogin.disabled = false;
+            loginErr.textContent = e.message;
+            pwd.classList.add('shake');
+            setTimeout(function () { pwd.classList.remove('shake'); }, 400);
+        });
+    });
+
+    pwd.addEventListener('keydown', function (e) { if (e.key === 'Enter') btnLogin.click(); });
+    document.getElementById('btnRefresh').addEventListener('click', loadPlayers);
+    document.getElementById('btnLogout').addEventListener('click', function () { showLogin('已退出管理员登录'); });
+    document.getElementById('btnBack').addEventListener('click', function () { location.href = './index.html'; });
+
+    // 有 token 时先验证一次再进后台
+    if (token) {
+        api('/admin/players?limit=1').then(function () { showAdmin(); }).catch(function () { showLogin(''); });
+    } else {
+        showLogin('');
+    }
+})();
+</script>
+</body>
+</html>

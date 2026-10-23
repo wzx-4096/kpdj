@@ -1,0 +1,25 @@
+{
+  "name": "kpdj-web",
+  "version": "9.0.0",
+  "private": true,
+  "description": "13班卡牌对决 · 网页版（Node.js + Express 前后端工程）",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js",
+    "build": "node scripts/obfuscate.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.2",
+    "morgan": "^1.10.0"
+  },
+  "devDependencies": {
+    "javascript-obfuscator": "^4.1.1"
+  },
+  "license": "UNLICENSED"
+}

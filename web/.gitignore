@@ -1,0 +1,20 @@
+# 依赖与产物（勿提交）
+node_modules/
+
+# 运行时数据（存档/排行按需生成）
+server/data/*.json
+server/data/*.tmp
+
+# 混淆发布产物（由 npm run build 生成）
+dist/
+
+# 环境变量
+.env
+.dev.vars
+
+# Wrangler 本地状态
+.wrangler/
+
+# 构建临时文件
+.tmp_src.js
+.tmp_obf.js

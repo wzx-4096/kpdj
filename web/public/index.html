@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover, maximum-scale=1.0, minimum-scale=1.0">
+    <title>初13班卡牌对决</title>
+    <link rel="stylesheet" href="./css/style.css">
+</head>
+<body>
+<div class="bg-particles" id="bgParticles"></div>
+<div class="game-container" id="gameContainer">
+    <div class="screen active" id="screenMenu">
+        <div class="game-title" data-cls="🃏 卡牌对决">🃏 初13班</div>
+        <div class="game-subtitle">✦ 卡 牌 对 决 ✦</div>
+        <div style="font-size:50px;margin:4px 0;">⚔️</div>
+        <button class="btn" id="btnStartGame" style="font-size:18px;">🎮 开始游戏</button>
+        <button class="btn btn-info btn-sm" id="btnShowRules">📜 游戏规则</button>
+        <button class="btn btn-sm" id="btnSettings">⚙️ 设置</button>
+        <button class="btn btn-info btn-sm" id="btnFullscreen">⛶ 全屏</button>
+        <button class="btn btn-info btn-sm" id="btnSupport">💬 客服</button>
+        <button class="btn btn-info btn-sm" id="btnAccount">👤 登录 / 注册</button>
+        <div style="color:#667;font-size:10px;" id="versionLabel">v9.3 · 注册确认密码</div>
+    </div>
+    <div class="screen" id="screenSupport">
+        <div class="game-title" style="font-size:20px;">💬 在线客服</div>
+        <div class="modal-box" style="width:90%;max-width:400px;height:min(62vh,560px);display:flex;flex-direction:column;padding:0;overflow:hidden;">
+            <div style="display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:2px solid var(--border);background:rgba(15,16,32,0.6);flex-shrink:0;">
+                <div style="width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,#3a6db5,#7d5a9e);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">🎧</div>
+                <div style="text-align:left;line-height:1.3;">
+                    <div style="color:var(--gold);font-weight:800;font-size:14px;">官方客服 · 小卡</div>
+                    <div style="color:#7d8ab0;font-size:11px;">在线 · 智能助手为您服务</div>
+                </div>
+            </div>
+            <div id="csMsgs"></div>
+            <div id="csInputBar">
+                <input id="csInput" placeholder="请输入您的问题…" maxlength="120" autocomplete="off">
+                <button id="csSend">发送</button>
+            </div>
+        </div>
+        <button class="btn btn-sm" id="btnSupportBack">⬅ 返回</button>
+    </div>
+    <div class="screen" id="screenAccount">
+        <div class="game-title" style="font-size:20px;">👤 我的账号</div>
+        <div class="modal-box" style="width:90%;max-width:340px;">
+            <div id="accAuthView">
+                <div style="display:flex;gap:8px;justify-content:center;margin-bottom:12px;">
+                    <button class="btn btn-sm seg-btn active" id="btnAccTabLogin" type="button" style="min-width:84px;">登录</button>
+                    <button class="btn btn-sm seg-btn" id="btnAccTabReg" type="button" style="min-width:84px;">注册</button>
+                </div>
+                <input class="acc-input" id="accUser" placeholder="账号（2-20 个字符）" maxlength="20" autocomplete="username">
+                <input class="acc-input" id="accPass" type="password" placeholder="密码（至少 6 位）" maxlength="64" autocomplete="current-password">
+                <input class="acc-input" id="accPass2" type="password" placeholder="再次输入密码" maxlength="64" autocomplete="new-password" style="display:none;">
+                <div class="pwd-err" id="accErr"></div>
+                <button class="btn btn-success" id="btnAccSubmit" style="width:100%;margin-top:6px;">登录</button>
+                <div style="color:#8a93b8;font-size:10px;margin-top:10px;line-height:1.6;text-align:center;" id="accTip">登录后可在不同设备使用同一账号。</div>
+            </div>
+            <div id="accProfileView" style="display:none;">
+                <div style="color:#ccd;font-size:12px;text-align:center;">当前账号</div>
+                <div id="accName" style="color:var(--gold);font-size:20px;font-weight:900;text-align:center;margin:6px 0 4px;word-break:break-all;"></div>
+                <div id="accPid" style="color:#667;font-size:10px;text-align:center;margin-bottom:14px;"></div>
+                <button class="btn btn-danger btn-sm" id="btnAccLogout" style="width:100%;">退出登录</button>
+            </div>
+        </div>
+        <button class="btn btn-sm" id="btnAccountBack">⬅ 返回</button>
+    </div>
+    <div class="screen" id="screenSettings">
+        <div class="game-title" style="font-size:20px;">⚙️ 设置</div>
+        <div class="modal-box" style="width:90%;max-width:320px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 2px;">
+                <span style="color:#fff;font-size:13px;font-weight:700;">🎴 三合一模式</span>
+                <button id="btnTriToggle" class="light-toggle" type="button"><span class="knob"></span></button>
+            </div>
+            <div style="color:#8a93b8;font-size:10px;padding:2px 2px 6px;border-bottom:1px solid rgba(255,255,255,0.12);">开启后模式选择页以三合一代替自由/双人/大乱斗</div>
+        </div>
+        <div class="set-item" id="btnJoySetting"><span>🕹️ 摇杆设置</span><span class="arr">›</span></div>
+        <div class="set-item" id="btnAbout"><span>ℹ️ 关于</span><span class="arr">›</span></div>
+        <div class="set-item" id="btnDevSetting" style="display:none;"><span>🛠 开发者选项</span><span class="arr">›</span></div>
+        <button class="btn btn-sm" id="btnSettingsBack">⬅ 返回</button>
+    </div>
+    <div class="screen" id="screenDev">
+        <div class="game-title" style="font-size:20px;">🛠 开发者选项</div>
+        <div class="modal-box" style="width:90%;max-width:320px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 2px;">
+                <span style="color:#fff;font-size:13px;font-weight:700;">开启开发者选项</span>
+                <button id="btnDevToggle" class="light-toggle" type="button"><span class="knob"></span></button>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 2px 4px;border-top:1px solid rgba(255,255,255,0.12);margin-top:8px;">
+                <span style="color:#fff;font-size:13px;font-weight:700;">🎬 更多动画</span>
+                <button id="btnAnimToggle" class="light-toggle" type="button"><span class="knob"></span></button>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 2px 4px;border-top:1px solid rgba(255,255,255,0.12);margin-top:8px;">
+                <span style="color:#fff;font-size:13px;font-weight:700;">🕶️ 屏蔽真实名字</span>
+                <button id="btnHideNameToggle" class="light-toggle" type="button"><span class="knob"></span></button>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 2px 4px;border-top:1px solid rgba(255,255,255,0.12);margin-top:8px;">
+                <span style="color:#fff;font-size:13px;font-weight:700;">🕶 隐藏角色·<span data-role="zhuhaoyu">朱皓宇</span></span>
+                <button id="btnHideZhuToggle" class="light-toggle" type="button"><span class="knob"></span></button>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 2px 4px;border-top:1px solid rgba(255,255,255,0.12);margin-top:8px;">
+                <span style="color:#fff;font-size:13px;font-weight:700;">🎵 背景音乐</span>
+                <button id="btnMusicToggle" class="light-toggle" type="button"><span class="knob"></span></button>
+            </div>
+        </div>
+        <div class="set-item" id="btnLightSetting" style="display:none;"><span>✨ 沉浸光感 <i class="beta-tag">Beta</i></span><span class="arr">›</span></div>
+        <div class="set-item" id="btnDevStory" style="display:none;"><span>📖 故事模式</span><span class="arr">›</span></div>
+        <button class="btn btn-sm" id="btnDevBack">⬅ 返回</button>
+    </div>
+    <div class="screen" id="screenDevStory">
+        <div class="game-title" style="font-size:20px;">📖 故事模式</div>
+        <div class="modal-box" style="width:90%;max-width:340px;max-height:60vh;overflow-y:auto;">
+            <div style="color:#99a;font-size:11px;line-height:1.7;text-align:left;margin-bottom:8px;">被隐藏的关卡不会出现在故事地图中；后续关卡会顺延点亮。</div>
+            <div id="devStoryList"></div>
+        </div>
+        <button class="btn btn-sm" id="btnDevStoryBack">⬅ 返回</button>
+    </div>
+    <div class="screen" id="screenLight">
+        <div class="game-title" style="font-size:20px;">✨ 沉浸光感 <span style="color:#f0a040;font-size:11px;">Beta</span></div>
+        <div class="modal-box" style="width:90%;max-width:320px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 2px;">
+                <span style="color:#fff;font-size:13px;font-weight:700;">开启沉浸光感</span>
+                <button id="btnLightToggle" class="light-toggle" type="button"><span class="knob"></span></button>
+            </div>
+            <div id="lightSegWrap" style="transition:opacity 0.3s;">
+                <div style="display:flex;gap:8px;justify-content:center;margin:12px 0 8px;" id="lightSeg">
+                    <button class="btn btn-sm seg-btn" data-level="strong" style="min-width:64px;">强</button>
+                    <button class="btn btn-sm seg-btn" data-level="gentle" style="min-width:64px;">均衡</button>
+                    <button class="btn btn-sm seg-btn" data-level="smooth" style="min-width:64px;">弱</button>
+                </div>
+            </div>
+        </div>
+        <button class="btn btn-sm" id="btnLightBack">⬅ 返回</button>
+    </div>
+    <div class="screen" id="screenAbout">
+        <div class="game-title" style="font-size:20px;">ℹ️ 关于</div>
+        <div class="modal-box" style="width:90%;max-width:320px;">
+            <h3>📝 本次更新</h3>
+            <div style="color:#ccd;font-size:11px;line-height:1.9;text-align:left;">
+                <div>🔒 <b>注册确认密码</b>：注册时需再次输入一次密码，两次一致才能创建账号，避免输错</div>
+                <div>👤 <b>账号系统</b>：主菜单新增登录/注册，账号密码保存在 Cloudflare D1，密码只存哈希不存明文；不需要手机号和验证码</div>
+                <div>😋 <b><span data-role="liukun">刘焜</span>强化</b>：吃食物回血从2点提升到5点，干饭人奶量翻倍多</div>
+                <div>🧱 <b>工程化重构</b>：网页版拆分为标准 Node.js + Express 前后端工程，前端 HTML/CSS/JS 分离，后端新增存档/排行接口，玩法完全不变</div>
+                <div>🕹️ <b>摇杆设置全屏化</b>：键位调整改为全屏预览，所见即所得，拖动更精准</div>
+                <div>📖 <b>故事模式正式上线</b>：闯关制故事地图，逐关解锁，序章开启父子间的第一场对决</div>
+                <div>🎴 <b>三合一模式正式上线</b>：三种玩法一键融合，设置里可开关</div>
+                <div>⛶ <b>全屏模式</b>：主菜单一键全屏，沉浸式游玩（网页版专属）</div>
+                <div>👧 <b><span data-role="lichenyu">李晨雨</span>强化</b>：声波变成无法反弹但可穿透的音波，伤害20；血量低于一半后被攻击20%把攻击者记上死亡笔记📓，反伤100</div>
+                <div>💬 <b>在线客服</b>：主菜单新增客服入口，有问题可以随时找客服小卡反馈</div>
+                <div>🕹️ <b>手动对战正式版</b>：模式选择新增手动对战，左下摇杆走位、右下摇杆瞄准松开发射，冷却直接显示在摇杆上；电脑支持键盘（WASD/方向键移动、IJKL瞄准、空格发射）</div>
+                <div>🎛️ <b>摇杆自定义</b>：设置 → 摇杆设置，可自由拖动两个摇杆的位置、滑块调整大小，自动记住</div>
+                <div>😋 <b>新角色·<span data-role="liukun">刘焜</span></b>：干饭人登场！400血初始大体型，每5秒生成5个食物（上限20），吃到食物回血长大，碰撞造成3点伤害</div>
+                <div>🏫 <b>阵营系统</b>：<span data-role="wangyan">王艳</span>、<span data-role="dingxiaohua">丁晓华</span>、<span data-role="renqiuhong">任秋红</span>、<span data-role="zhaolina">赵丽娜</span>为老师阵营，其余为学生阵营，家长只攻击学生</div>
+                <div>✨ 按压动效固定为Q弹果冻手感</div>
+            </div>
+        </div>
+        <div class="modal-box" style="width:90%;max-width:320px;">
+            <h3>📖 玩法说明</h3>
+            <div style="color:#ccd;font-size:11px;line-height:1.9;text-align:left;">
+                <div>• <b>自由模式</b>：自选两名角色 1v1 对决</div>
+                <div>• <b>双人对战</b>：两人各自翻牌抽卡，抽到什么用什么</div>
+                <div>• <b>大乱斗</b>：任意数量角色混战，最后存活的获胜</div>
+                <div>• <b>手动对战</b>：双摇杆亲自操作，手机触屏 / 电脑键盘都能玩，摇杆位置大小可自定义</div>
+                <div>• <b>三合一</b>：自由/双人/大乱斗三种玩法一网打尽，设置中可开关</div>
+                <div>• <b>故事模式</b>：闯关制故事地图，通关一关解锁下一关</div>
+                <div>• 每个角色拥有独特技能，战斗中自动释放</div>
+                <div>• 消灭对手全部角色即获得胜利</div>
+            </div>
+        </div>
+        <div class="modal-box" style="width:90%;max-width:320px;">
+            <div style="text-align:center;color:#ccd;font-size:11px;line-height:1.9;">
+                <div style="font-size:15px;font-weight:900;color:var(--gold);" data-cls="卡牌对决">13班卡牌对决</div>
+                <div id="aboutVersion" style="cursor:pointer;">版本 v7.3 · 开发者选项</div>
+                <div id="unlockHint" style="color:#f0a040;font-size:10px;min-height:14px;"></div>
+            </div>
+        </div>
+        <button class="btn btn-sm" id="btnAboutBack">⬅ 返回</button>
+    </div>
+    <div class="screen" id="screenMode">
+        <div class="game-title" style="font-size:20px;">选择模式</div>
+        <button class="btn btn-success" id="btnFreeMode">🆓 自由模式</button>
+        <button class="btn" id="btnDualMode">👥 双人对战</button>
+        <button class="btn btn-warning" id="btnBRMode">🔥 大乱斗</button>
+        <button class="btn btn-info" id="btnManualMode">🕹️ 手动对战</button>
+        <button class="btn" id="btnTriMode">🎴 三合一</button>
+        <button class="btn" id="btnStoryMode">📖 故事模式</button>
+        <button class="btn btn-sm btn-danger" id="btnBackToMenu">↩ 返回</button>
+    </div>
+    <div class="screen" id="screenJoySettings">
+        <div class="joy-top">
+            <button class="btn btn-sm btn-danger" id="btnJoyBack">⬅ 返回</button>
+            <b>🕹️ 摇杆设置</b>
+            <span class="ph"></span>
+        </div>
+        <div id="joyStage">
+            <div class="jp-stick jp-move" id="jpMove"><span>移动</span></div>
+            <div class="jp-stick jp-skill" id="jpSkill"><span>技能</span></div>
+            <div class="joy-hint">拖动圆盘调整位置 · 预览与实战完全一致</div>
+        </div>
+        <div class="joy-bottom">
+            <button class="btn btn-sm" id="btnJoyReset">↺ 恢复默认</button>
+            <div class="joy-size-row">📏 大小 <input type="range" id="joySizeRange" min="80" max="150" step="2" value="108"> <span id="joySizeVal" style="width:38px;text-align:right;">108</span></div>
+        </div>
+    </div>
+    <div class="screen" id="screenStory">
+        <div class="story-scroll" id="storyScroll">
+            <div class="story-top">
+                <button class="btn btn-sm btn-danger" id="btnStoryBack" style="padding:6px 12px;">↩</button>
+                <b style="color:var(--gold);font-size:15px;flex:1;text-align:center;padding-right:30px;">📖 故事模式</b>
+            </div>
+            <div class="story-world" id="storyWorld"></div>
+        </div>
+    </div>
+    <div class="screen" id="screenStoryTest">
+        <div class="game-title" style="font-size:20px;">📖 关卡介绍</div>
+        <div style="font-size:56px;margin:14px 0;" id="storyTestIcon">🧱</div>
+        <div id="storyTestName" style="color:#fff;font-weight:900;font-size:18px;margin-bottom:6px;">关卡</div>
+        <div id="storyTestIntro" style="color:#aab;font-size:12px;background:var(--panel);padding:14px 18px;border-radius:12px;border:1px dashed var(--border);text-align:left;line-height:1.8;">🚧 此关卡正在建设中…</div>
+        <button class="btn btn-sm" id="btnStoryTestStart" style="margin-top:14px;">⚔️ 开始游戏</button>
+        <button class="btn btn-sm btn-danger" id="btnStoryTestBack" style="margin-top:8px;">⬅ 返回地图</button>
+    </div>
+    <div class="screen" id="screenStoryScene">
+        <button class="btn btn-sm btn-danger story-quit" id="btnSceneQuit">↩</button>
+        <div class="scene-stage">
+            <div class="room-floor"></div>
+            <div class="rug"></div>
+            <div class="win-pool"></div>
+            <div class="wall-band"></div>
+            <div class="room-window"></div>
+            <div class="room-door" id="roomDoor">
+                <div class="door-hole"></div>
+                <div class="door-light"></div>
+                <div class="door-panel"><span class="door-knob"></span></div>
+            </div>
+            <div class="bed">
+                <div class="bed-head"></div><div class="bed-mat"></div><div class="bed-pillow"></div><div class="bed-pillow2"></div><div class="bed-blanket"></div>
+            </div>
+            <div class="nightstand"></div>
+            <div class="room-alarm" id="roomAlarm">⏰</div>
+            <div class="desk">
+                <div class="desk-monitor"></div><div class="desk-kb"></div><div class="desk-chair"></div>
+            </div>
+            <div class="slippers">🥿🥿</div>
+            <i class="dust d1"></i><i class="dust d2"></i><i class="dust d3"></i><i class="dust d4"></i>
+            <div class="room-actor" id="actorLz" data-key="lz"><span class="ra-emoji" id="emojiLz">😴</span><span class="ra-tag" id="tagLz" data-role="lijiaze">李嘉泽</span><div class="zzz"><span>z</span><span>Z</span><span>z</span></div></div>
+            <div class="actor-slot off" id="slotFq"><div class="room-actor" id="actorFq" data-key="fq"><span class="ra-emoji" id="emojiFq">👨</span><span class="ra-tag">浮琴</span></div></div>
+            <div class="actor-slot off" id="slotMq"><div class="room-actor" id="actorMq" data-key="mq"><span class="ra-emoji" id="emojiMq">👩</span><span class="ra-tag">木琴</span></div></div>
+        </div>
+        <div class="scene-stage cls-stage" id="stageClass">
+            <div class="cls-wall"></div>
+            <div class="cls-wainscot"></div>
+            <div class="cls-floor"></div>
+            <div class="cls-board">
+                <span class="cls-chalk1">上课啦！</span>
+                <span class="cls-chalk2">别说话 · 认真听讲</span>
+                <span class="cls-chalk3">值日：<span data-role="lijiaze">李嘉泽</span></span>
+                <span class="cls-tray"></span>
+            </div>
+            <div class="cls-clock">🕐</div>
+            <i class="cls-bell" id="clsBell">🔔</i>
+            <div class="cls-window"><i></i></div>
+            <div class="cls-posters"><span class="cls-poster p1">🏆 流动红旗</span><span class="cls-poster p2">📚 图书角</span></div>
+            <div class="cls-light-pool"></div>
+            <div class="cls-podium">
+                <div class="room-actor cls-actor cls-teacher" data-key="lcy"><span class="ra-emoji" id="cEmojiLcy">👧</span><span class="ra-tag" data-role="lichenyu">李晨雨</span></div>
+            </div>
+            <div class="cls-row cls-front">
+                <div class="cls-desk d1"><div class="cls-seat"></div><div class="room-actor cls-actor" data-key="lz" id="clsLz"><span class="ra-emoji" id="cEmojiLz">😴</span><span class="ra-tag" data-role="lijiaze">李嘉泽</span></div></div>
+                <div class="cls-desk d2"><div class="cls-seat"></div><div class="room-actor cls-actor" data-key="lym" id="clsLym"><span class="ra-emoji" id="cEmojiLym">🧑‍🎓</span><span class="ra-tag" data-role="liuyiming">刘一鸣</span></div></div>
+            </div>
+            <div class="cls-row cls-mid">
+                <div class="cls-desk d3"><div class="cls-seat"></div><div class="cls-stu s1">🤪</div></div>
+                <div class="cls-desk d4"><div class="cls-seat"></div><div class="cls-stu s2">🙉</div></div>
+                <div class="cls-desk d5"><div class="cls-seat"></div><div class="cls-stu s3">😝</div></div>
+                <div class="cls-desk d6"><div class="cls-seat"></div><div class="cls-stu s4">🤣</div></div>
+            </div>
+            <div class="cls-row cls-back">
+                <div class="cls-desk d7"><div class="cls-seat"></div><div class="cls-stu s5">😆</div></div>
+                <div class="cls-desk d8"><div class="cls-seat"></div><div class="cls-stu s6">🥱</div></div>
+                <div class="cls-desk d9"><div class="cls-seat"></div><div class="cls-stu s7">🤭</div></div>
+                <div class="cls-desk d10"><div class="cls-seat"></div><div class="cls-stu s8">😜</div></div>
+            </div>
+            <div class="cls-noise"><span>💬</span><span>…</span><span>🔊</span></div>
+        </div>
+        <div class="dlg-box" id="dlgBox">
+            <div class="dlg-speaker" id="dlgSpeaker"><span class="ds-emoji" id="dlgEmoji"></span><b id="dlgName"></b></div>
+            <div class="dlg-text" id="dlgText"></div>
+            <div class="dlg-next" id="dlgNext">点击继续 ▶</div>
+        </div>
+        <div id="blinkOverlay"><div class="lid lid-top"></div><div class="lid lid-bottom"></div></div>
+    </div>
+    <div class="screen" id="screenDuelInvite">
+        <div class="iv-rays"></div>
+        <div class="iv-card">
+            <div class="iv-cross">⚔️</div>
+            <div class="iv-title">决斗邀请</div>
+            <div class="iv-avatar" id="ivAvatar">🤬</div>
+            <div class="iv-line"><b class="iv-from" id="ivFrom">浮琴</b> 向 <b class="iv-to" id="ivTo">你</b> 发起决斗！</div>
+            <div class="iv-sub" id="ivSub">七匹狼 VS Z字弹 · 卧室父子决战</div>
+            <div class="iv-btns">
+                <button class="btn btn-danger iv-btn" id="btnIvRefuse">🏃 拒绝</button>
+                <button class="btn btn-success iv-btn" id="btnIvAccept">⚔️ 接受决斗</button>
+            </div>
+        </div>
+    </div>
+    <div class="screen" id="screenDuelIntro">
+        <div class="di-rays"></div>
+        <div class="di-flash"></div>
+        <div class="di-arena di-shake">
+            <div class="di-card di-left"><div class="di-emoji">🤬</div><div class="di-nm">浮琴</div><div class="di-hp">❤️ 300 · 七匹狼</div></div>
+            <div class="di-vs">VS<div class="di-clash" style="position:absolute;left:50%;top:50%;margin:-35px 0 0 -35px;">💥</div></div>
+            <div class="di-card di-right"><div class="di-emoji">😴</div><div class="di-nm" data-role="lijiaze">李嘉泽</div><div class="di-hp">❤️ 300 · Z字弹</div></div>
+        </div>
+        <div class="di-tag">🤬 父 子 の 决 战 🤬</div>
+    </div>
+    <div class="screen" id="screenStoryResult">
+        <div class="sr-rays"></div>
+        <div id="srConfetti" style="position:absolute;inset:0;overflow:hidden;pointer-events:none;"></div>
+        <div class="sr-title" id="srTitle"></div>
+        <div class="sr-face" id="srFace"></div>
+        <div class="sr-stars" id="srStars"></div>
+        <div class="sr-rate" id="srRate"></div>
+        <div class="sr-btns" id="srBtns">
+            <button class="btn btn-success" id="btnSrRetry">🔁 再来一次</button>
+            <button class="btn btn-danger" id="btnSrMap">🗺 返回地图</button>
+        </div>
+    </div>
+    <div class="screen" id="screenManualSelect">
+        <div class="game-title" style="font-size:18px;">🕹️ 手动对战</div>
+        <div id="manualSelectionInfo" style="color:#ccc;font-size:12px;">请选择<b>你的角色</b>和<b>敌方角色</b></div>
+        <div id="manualRoleList" style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;width:100%;"></div>
+        <button class="btn btn-sm btn-danger" id="btnManualReset" style="display:none;">🔄 重新选择</button>
+        <button class="btn btn-sm btn-danger" id="btnManualBack">↩ 返回</button>
+    </div>
+    <div class="screen" id="screenFreeSelect">
+        <div class="game-title" style="font-size:18px;">选择对战双方</div>
+        <div id="freeSelectionInfo" style="color:#ccc;font-size:12px;">请选择<b>玩家1</b>和<b>玩家2</b></div>
+        <div id="freeRoleList" style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;width:100%;"></div>
+        <button class="btn btn-sm btn-danger" id="btnFreeReset" style="display:none;">🔄 重新选择</button>
+        <button class="btn btn-sm btn-danger" id="btnBackToMode">↩ 返回</button>
+    </div>
+    <div class="screen" id="screenBRSelect">
+        <div class="game-title" style="font-size:18px;">🔥 大乱斗 - 选择角色</div>
+        <div id="brSelectionInfo" style="color:#ccc;font-size:12px;">勾选2~5个角色进行混战</div>
+        <div id="brRoleList" style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;width:100%;"></div>
+        <button class="btn btn-warning btn-sm" id="btnStartBR" style="display:none;">⚔️ 开始大乱斗</button>
+        <button class="btn btn-sm btn-danger" id="btnBackToMode3">↩ 返回</button>
+    </div>
+    <div class="screen" id="screenTri">
+        <div class="game-title" style="font-size:18px;">🎴 三合一</div>
+        <div class="tri-slots" id="triSlots"></div>
+        <div class="tri-fan" id="triFan"></div>
+        <div class="tri-hint" id="triHint">左右拖动或滚轮切换卡牌 · 上滑或点击把当前卡放进卡槽 · 点卡槽可移除</div>
+        <button class="btn btn-success" id="btnTriStart" style="display:none;">⚔️ 开始</button>
+        <button class="btn btn-sm btn-danger" id="btnTriBack">↩ 返回</button>
+    </div>
+    <div class="screen" id="screenDualDraw">
+        <div class="game-title" style="font-size:16px;">🎴 抽卡决定命运</div>
+        <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;justify-content:center;">
+            <div style="text-align:center;"><div style="color:#7dbfff;font-weight:700;">👤 玩家1（下方）</div><div class="draw-card" id="drawCard1"><div class="card-back">❓</div><div class="card-front"><span class="card-avatar" id="drawAvatar1"></span><span class="card-name" id="drawName1"></span></div></div></div>
+            <div style="font-size:28px;color:var(--gold);">⚡VS⚡</div>
+            <div style="text-align:center;"><div style="color:#ff6b8a;font-weight:700;">👤 玩家2（上方）</div><div class="draw-card" id="drawCard2"><div class="card-back">❓</div><div class="card-front"><span class="card-avatar" id="drawAvatar2"></span><span class="card-name" id="drawName2"></span></div></div></div>
+        </div>
+        <button class="btn btn-success" id="btnStartDualBattle" style="display:none;">⚔️ 开始对决</button>
+        <button class="btn btn-sm btn-danger" id="btnBackToMode2">↩ 返回</button>
+    </div>
+    <div class="screen" id="screenVS">
+        <div class="vs-rays"></div>
+        <div class="vs-flash"></div>
+        <div class="vs-arena" id="vsArena">
+            <div id="vsCardMulti" style="position:absolute;inset:0;pointer-events:none;display:none;"></div>
+            <div class="vs-card vs-card-left" id="vsCard1"><span class="vs-avatar" id="vsAvatar1"></span><div class="vs-name" id="vsName1"></div><div class="vs-hp" id="vsHp1"></div></div>
+            <div class="vs-logo" id="vsLogoWord">VS</div>
+            <div class="vs-card vs-card-right" id="vsCard2"><span class="vs-avatar" id="vsAvatar2"></span><div class="vs-name" id="vsName2"></div><div class="vs-hp" id="vsHp2"></div></div>
+        </div>
+        <div style="color:#778;font-size:12px;letter-spacing:4px;padding-bottom:24px;">⚔️ 巅 峰 对 决 ⚔️</div>
+    </div>
+    <div class="screen" id="screenVictory">
+        <div class="vs-rays"></div>
+        <div id="vicConfetti" style="position:absolute;inset:0;overflow:hidden;pointer-events:none;"></div>
+        <div class="vic-title">🏆 VICTORY 🏆</div>
+        <div class="vic-avatar" id="vicAvatar"></div>
+        <div class="vic-name" id="vicName"></div>
+        <div style="display:flex;gap:10px;">
+            <button class="btn btn-success" id="btnVictoryRematch">🔁 再战一局</button>
+            <button class="btn btn-danger" id="btnVictoryBack">🏠 返回菜单</button>
+        </div>
+    </div>
+    <div class="screen" id="screenBattle">
+        <div class="battle-hud" id="battleHud"></div>
+        <div class="battle-arena-wrapper"><canvas class="battle-canvas" id="battleCanvas"></canvas></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;">
+            <button class="btn btn-sm btn-danger" id="btnEndBattle">🏳️ 结束</button>
+            <button class="btn btn-sm" id="btnRematch" style="display:none;">🔄 再来</button>
+        </div>
+        <div id="battleResult" style="text-align:center;font-weight:700;font-size:16px;color:var(--gold);min-height:24px;"></div>
+        <div id="kbHint" style="display:none;text-align:center;font-size:11px;color:#9ab;background:rgba(255,255,255,0.06);border-radius:8px;padding:4px 8px;">⌨️ WASD/方向键移动 · 🖱️ 鼠标瞄准 · 左键/空格发射</div>
+        <div class="joy-wrap" id="joyMoveWrap">
+            <div class="joy-base" id="joyMove"><div class="joy-label">🕹️ 移动</div><div class="joy-knob"></div></div>
+        </div>
+        <div class="joy-wrap" id="joySkillWrap">
+            <div class="joy-base" id="joySkill"><div class="joy-cd" id="joyCd"></div><div class="joy-label">⚡ 技能</div><div class="joy-knob"></div></div>
+        </div>
+    </div>
+    <div class="modal-overlay" id="modalPwd">
+        <div class="modal-box" style="width:84%;max-width:300px;">
+            <h3>🔐 身份验证</h3>
+            <div style="color:#aab;font-size:11px;text-align:center;">请输入访问密码</div>
+            <input type="password" class="pwd-input" id="pwdInput" autocomplete="off" placeholder="输入密码">
+            <div class="pwd-err" id="pwdErr"></div>
+            <div style="display:flex;gap:8px;">
+                <button class="btn btn-sm btn-danger" id="btnPwdCancel" style="flex:1;">取消</button>
+                <button class="btn btn-sm btn-success" id="btnPwdOk" style="flex:1;">确定</button>
+            </div>
+        </div>
+    </div>
+    <div id="authOkOverlay">
+        <div class="auth-sweep"></div>
+        <div class="auth-ring-box">
+            <svg class="auth-ring" viewBox="0 0 108 108"><circle cx="54" cy="54" r="48"></circle></svg>
+            <div class="auth-check">✓</div>
+        </div>
+        <div class="auth-text">身份验证已通过</div>
+        <div class="auth-sub">ACCESS GRANTED</div>
+    </div>
+    <div id="secretImgOverlay">
+        <img id="secretImg" alt="01">
+        <div id="secretImgTip">🖼️ 图片还没放进来<br>请把名为「01」的图片放入 web/public/images/（支持 png / jpg / jpeg / gif / webp）</div>
+        <div id="secretImgCloseHint">点击任意处关闭</div>
+    </div>
+    <div class="modal-overlay" id="modalRules">
+        <div class="modal-box">
+            <h3>📜 游戏规则</h3>
+            <ul>
+                <li><b>自由模式：</b>手动选两个角色对战，自动弹跳，碰边反弹。</li>
+                <li><b>双人对战：</b>双方抽卡，玩家1下方，玩家2上方。</li>
+                <li><b>大乱斗：</b>自选2-5个角色混战，存活到最后获胜！</li>
+                <li><b>🕹️ 手动对战：</b>选自己和敌方的角色，由你亲自操作！左下摇杆控制走位，右下摇杆朝推动方向<b>松开</b>发射技能（冷却显示在摇杆上）；电脑自动隐藏摇杆，用 WASD/方向键移动、鼠标瞄准、左键或空格发射（冷却显示在角色脚下的环上）。触屏设备可在「设置→摇杆设置」里自定义摇杆位置和大小。</li>
+                <li><b><span data-role="wangyan">王艳</span>👩‍🏫：</b>弯折腿🦵，冷却3秒，反弹3次，伤害30；副技能📱叫家长：每30秒拿出手机召唤2名家长👨👩（烟雾降临，随机位置），家长随机弹跳，碰到学生撞上扣10血，不会伤到<span data-role="wangyan">王艳</span>。</li>
+                <li><b><span data-role="lijiaze">李嘉泽</span>😴：</b>打鼾Z💤，冷却4秒，3个Z各15伤害。</li>
+                <li><b><span data-role="lichenyu">李晨雨</span>👧：</b>声波🌊，冷却5.5秒，伤害20，无法反弹可穿透；半血后被攻击20%把攻击者记上死亡笔记📓，反伤100。</li>
+                <li id="ruleRoleZhu"><b><span data-role="zhuhaoyu">朱皓宇</span>👦：</b>豪车🚗/金表⌚，冷却4.5秒，随机28或20伤害。</li>
+                <li><b><span data-role="dingxiaohua">丁晓华</span>👩‍💻：</b>电脑💻，冷却7秒，时停3秒每秒18血。</li>
+                <li><b><span data-role="renqiuhong">任秋红</span>👩‍🏫：</b>召唤皇帝👑，冷却10秒，上限5个，皇帝近战伤15/血30，50%闪避投射物。</li>
+                <li><b><span data-role="chengxinxin">程梓鑫</span>🧑‍🍳：</b>牛肉饼🍔，冷却5秒，反弹5次消失，敌伤15，自回30。</li>
+                <li><b><span data-role="zhaolina">赵丽娜</span>👩‍🏫：</b>菠菜叶🥬，每秒发射，伤害5，死亡后满血复活一次。</li>
+                <li><b><span data-role="liuyiming">刘一鸣</span>🧑‍🎓：</b>鸡米花🍿，冷却3秒，伤害15，开局1秒后分身出<span data-role="liuerming">刘二鸣</span>、<span data-role="liusanming">刘三鸣</span>（各150血）。</li>
+                <li><b><span data-role="liukun">刘焜</span>😋：</b>干饭人，400血初始大体型；场上每5秒生成5个食物🍔（最多共存20个），吃到食物回血5并长大；普通碰撞扣10血；<b>每10秒自动冲锋</b>锁定最近的敌人高速撞过去，撞上扣30血。</li>
+                <li><b>阵营：</b><span data-role="wangyan">王艳</span>、<span data-role="dingxiaohua">丁晓华</span>、<span data-role="renqiuhong">任秋红</span>、<span data-role="zhaolina">赵丽娜</span>为👩‍🏫老师阵营，其余角色为🧑‍🎓学生阵营；<span data-role="wangyan">王艳</span>召唤的家长只攻击学生。</li>
+            </ul>
+            <button class="btn btn-sm" id="btnCloseRules" style="width:100%;margin-top:8px;">✅ 我知道了</button>
+        </div>
+    </div>
+</div>
+<script src="./js/game.js"></script>
+</body>
+</html>
