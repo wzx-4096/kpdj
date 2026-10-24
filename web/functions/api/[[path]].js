@@ -518,7 +518,7 @@ async function handleAdminPlayers(url, request, env) {
 
   const limit = clampLimit(url.searchParams.get('limit'));
   const [list, total] = await Promise.all([
-    env.DB.prepare('SELECT pid, username, nickname, created_at, updated_at FROM players ORDER BY created_at DESC LIMIT ?').bind(limit).all(),
+    env.DB.prepare('SELECT pid, username, nickname, avatar, created_at, updated_at FROM players ORDER BY created_at DESC LIMIT ?').bind(limit).all(),
     env.DB.prepare('SELECT COUNT(*) AS n FROM players').first()
   ]);
   return json({ total: (total && total.n) || 0, limit, players: (list && list.results) || [] });

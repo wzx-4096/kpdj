@@ -7,7 +7,7 @@
 <style>
     * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
     body { min-height:100vh; min-height:100dvh; background:radial-gradient(circle at 50% 0%,#1b2340 0%,#0d0d1a 60%); color:#e8ecff; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif; display:flex; align-items:center; justify-content:center; padding:20px; }
-    .card { width:100%; max-width:460px; background:rgba(20,22,40,0.92); border:2px solid rgba(240,192,96,0.7); border-radius:16px; padding:20px; box-shadow:0 0 50px rgba(0,0,0,0.7); }
+    .card { width:100%; max-width:520px; background:rgba(20,22,40,0.92); border:2px solid rgba(240,192,96,0.7); border-radius:16px; padding:20px; box-shadow:0 0 50px rgba(0,0,0,0.7); }
     h1 { font-size:20px; text-align:center; color:#f0c060; letter-spacing:1px; margin-bottom:6px; }
     .sub { font-size:11px; color:#8a93b8; text-align:center; margin-bottom:16px; }
     input { width:100%; padding:12px 14px; font-size:16px; border-radius:10px; border:2px solid rgba(255,255,255,0.18); background:#0f1020; color:#fff; outline:none; }
@@ -27,9 +27,14 @@
     .row { display:flex; align-items:center; gap:10px; padding:10px 12px; border-bottom:1px solid rgba(255,255,255,0.07); }
     .row:last-child { border-bottom:none; }
     .row .idx { width:28px; flex:0 0 28px; color:#66739c; font-size:11px; text-align:right; }
+    .row .avatar { width:40px; height:40px; flex:0 0 40px; border-radius:50%; overflow:hidden; border:1px solid rgba(240,192,96,0.55); background:#1b2340; display:flex; align-items:center; justify-content:center; color:#f0c060; font-size:16px; font-weight:800; }
+    .row .avatar img { width:100%; height:100%; object-fit:cover; display:block; }
     .row .info { flex:1; min-width:0; }
     .row .name { font-size:14px; font-weight:800; color:#fff; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .row .name .acc { font-size:10px; font-weight:600; color:#8a93b8; margin-left:6px; }
     .row .meta { font-size:10px; color:#7d8ab0; margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .live { display:flex; align-items:center; gap:6px; font-size:10px; color:#7d8ab0; margin:-4px 0 8px; }
+    .live .dot { width:6px; height:6px; border-radius:50%; background:#3fae5c; box-shadow:0 0 6px #3fae5c; flex:0 0 6px; }
     .empty { padding:28px 12px; text-align:center; color:#7d8ab0; font-size:12px; }
     .foot { display:flex; gap:8px; margin-top:14px; }
     .foot button { flex:1; }
@@ -39,7 +44,7 @@
 <body>
 <div class="card">
     <h1>🛠 MTC 管理后台</h1>
-    <div class="sub">管理员入口 · 与玩家账号完全独立</div>
+    <div class="sub">管理员入口 · 与玩家账号完全独立 · v1.1 昵称头像</div>
 
     <!-- 登录 -->
     <div id="loginView">
@@ -55,6 +60,7 @@
             <button id="btnRefresh" type="button">刷新</button>
             <button class="danger" id="btnLogout" type="button">退出</button>
         </div>
+        <div class="live"><span class="dot"></span><span id="liveText">自动刷新中</span></div>
         <div class="list" id="list"><div class="empty">加载中…</div></div>
         <div class="foot"><button id="btnBack" type="button">← 返回游戏</button></div>
         <div class="err" id="adminErr"></div>
@@ -77,6 +83,8 @@
     var list = document.getElementById('list');
     var count = document.getElementById('count');
     var btnLogin = document.getElementById('btnLogin');
+    var liveText = document.getElementById('liveText');
+    var deleting = false, autoTimer = null, lastSig = '';
 
     function saveToken(t) {
         token = t || '';
@@ -111,8 +119,38 @@
         return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
     }
 
+    function fmtClock(d) {
+        var p = function (n) { return n < 10 ? '0' + n : '' + n; };
+        return p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
+    }
+
+    // 头像和昵称变化都会反映到签名里，签名没变就不重建 DOM（避免每轮刷新闪烁）
+    function sigOf(players) {
+        return players.map(function (p) {
+            return p.pid + '|' + (p.nickname || '') + '|' + (p.avatar ? p.avatar.length : 0) + '|' + p.updated_at;
+        }).join(';');
+    }
+
+    function touchLive() {
+        if (liveText) liveText.textContent = '已是最新 · ' + fmtClock(new Date()) + ' · 每 15 秒自动刷新';
+    }
+
+    function startAuto() {
+        stopAuto();
+        autoTimer = setInterval(function () {
+            if (document.hidden) return;
+            if (adminView.classList.contains('hidden')) return;
+            loadPlayers(true);
+        }, 15000);
+    }
+
+    function stopAuto() {
+        if (autoTimer) { clearInterval(autoTimer); autoTimer = null; }
+    }
+
     function showLogin(msg) {
         saveToken('');
+        stopAuto();
         adminView.classList.add('hidden');
         loginView.classList.remove('hidden');
         loginErr.textContent = msg || '';
@@ -124,30 +162,41 @@
         loginView.classList.add('hidden');
         adminView.classList.remove('hidden');
         adminErr.textContent = '';
-        loadPlayers();
+        loadPlayers(false);
+        startAuto();
     }
 
-    function loadPlayers() {
+    function loadPlayers(silent) {
+        if (deleting) return;
         adminErr.textContent = '';
-        list.innerHTML = '';
-        var loading = document.createElement('div');
-        loading.className = 'empty';
-        loading.textContent = '加载中…';
-        list.appendChild(loading);
-        api('/admin/players?limit=500').then(function (data) {
-            renderPlayers(data.players || [], data.total || 0);
-        }).catch(function (e) {
+        if (!silent) {
             list.innerHTML = '';
-            var box = document.createElement('div');
-            box.className = 'empty';
-            box.textContent = e.message;
-            list.appendChild(box);
-            if (e.status === 401) showLogin('登录已失效，请重新输入管理员密码');
+            var loading = document.createElement('div');
+            loading.className = 'empty';
+            loading.textContent = '加载中…';
+            list.appendChild(loading);
+        }
+        api('/admin/players?limit=200').then(function (data) {
+            var players = data.players || [];
+            if (silent && sigOf(players) === lastSig) { touchLive(); return; }
+            renderPlayers(players, data.total || 0);
+            touchLive();
+        }).catch(function (e) {
+            if (e.status === 401) { showLogin('登录已失效，请重新输入管理员密码'); return; }
+            adminErr.textContent = e.message;
+            if (!silent) {
+                list.innerHTML = '';
+                var box = document.createElement('div');
+                box.className = 'empty';
+                box.textContent = e.message;
+                list.appendChild(box);
+            }
         });
     }
 
     function renderPlayers(players, total) {
         count.textContent = '共 ' + total + ' 名玩家' + (players.length < total ? '（显示最近 ' + players.length + ' 名）' : '');
+        lastSig = sigOf(players);
         list.innerHTML = '';
         if (!players.length) {
             var empty = document.createElement('div');
@@ -165,14 +214,34 @@
             idx.textContent = (i + 1);
             row.appendChild(idx);
 
+            // 头像：有自定义头像就显示图片，否则用昵称首字占位
+            var nick = p.nickname || p.username || '?';
+            var av = document.createElement('div');
+            av.className = 'avatar';
+            if (p.avatar) {
+                var im = document.createElement('img');
+                im.src = p.avatar;
+                im.alt = '';
+                av.appendChild(im);
+            } else {
+                av.textContent = String(nick).slice(0, 1);
+            }
+            row.appendChild(av);
+
             var info = document.createElement('div');
             info.className = 'info';
             var name = document.createElement('div');
             name.className = 'name';
-            name.textContent = p.username;                 // 用 textContent，防止账号名注入 HTML
+            name.textContent = nick;                       // 用 textContent，防止昵称注入 HTML
+            if (p.nickname && p.nickname !== p.username) {
+                var acc = document.createElement('span');
+                acc.className = 'acc';
+                acc.textContent = '@' + p.username;
+                name.appendChild(acc);
+            }
             var meta = document.createElement('div');
             meta.className = 'meta';
-            meta.textContent = p.pid + ' · 注册 ' + fmtTime(p.created_at);
+            meta.textContent = (p.nickname && p.nickname !== p.username ? '' : '@' + p.username + ' · ') + p.pid + ' · 注册 ' + fmtTime(p.created_at);
             info.appendChild(name);
             info.appendChild(meta);
             row.appendChild(info);
@@ -189,12 +258,16 @@
     }
 
     function removePlayer(p) {
-        if (!confirm('确定删除玩家「' + p.username + '」？\n删除后该账号无法再登录，数据不可恢复。')) return;
+        var label = p.nickname || p.username;
+        if (!confirm('确定删除玩家「' + label + '」（@' + p.username + '）？\n删除后该账号无法再登录，数据不可恢复。')) return;
+        deleting = true;
         adminErr.textContent = '正在删除…';
         api('/admin/players/' + encodeURIComponent(p.pid), { method: 'DELETE' }).then(function () {
+            deleting = false;
             adminErr.textContent = '';
-            loadPlayers();
+            loadPlayers(false);
         }).catch(function (e) {
+            deleting = false;
             adminErr.textContent = e.message;
             if (e.status === 401) showLogin('登录已失效，请重新输入管理员密码');
         });
@@ -218,9 +291,12 @@
     });
 
     pwd.addEventListener('keydown', function (e) { if (e.key === 'Enter') btnLogin.click(); });
-    document.getElementById('btnRefresh').addEventListener('click', loadPlayers);
+    document.getElementById('btnRefresh').addEventListener('click', function () { loadPlayers(false); });
     document.getElementById('btnLogout').addEventListener('click', function () { showLogin('已退出管理员登录'); });
     document.getElementById('btnBack').addEventListener('click', function () { location.href = './index.html'; });
+    document.addEventListener('visibilitychange', function () {
+        if (!document.hidden && !adminView.classList.contains('hidden')) loadPlayers(true);
+    });
 
     // 有 token 时先验证一次再进后台
     if (token) {
