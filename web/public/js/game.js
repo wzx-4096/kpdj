@@ -2657,6 +2657,9 @@
             dc.onmessage=ev=>{ try{ handleNetGame(JSON.parse(ev.data)); }catch(e){} };
             dc.onclose=()=>{ if(netMode==='p2p'){ netMode='relay'; onlineBadge('📡 中继'); onlinePollSet(120); } };
         }
+        function netDcDrop(){
+            if(netMode==='p2p'){ try{ if(netDc) netDc.close(); }catch(e){} netDc=null; netMode='relay'; onlineBadge('📡 中继'); onlinePollSet(120); }
+        }
         const NET_ICE={ iceServers:[{urls:['stun:stun.l.google.com:19302','stun:stun1.l.google.com:19302','stun:stun.miwifi.com:3478']}] };
         async function netConnect(){
             netClose();
@@ -2675,8 +2678,9 @@
             if(!onlineHost) return;          // 客机等房主的 offer
             try{
                 const pc=new RTCPeerConnection(NET_ICE); netPc=pc;
-                netSetupDc(pc.createDataChannel('kpdj'));
-                pc.oniceconnectionstatechange=()=>{};
+                // 状态/输入都是"过期即弃"的数据，不开重传，避免丢包时排队阻塞造成越打越卡
+                netSetupDc(pc.createDataChannel('kpdj',{ordered:true,maxRetransmits:0}));
+                pc.oniceconnectionstatechange=()=>{ if(pc.iceConnectionState==='failed'||pc.iceConnectionState==='disconnected') netDcDrop(); };
                 const offer=await pc.createOffer();
                 await pc.setLocalDescription(offer);
                 await netWaitIce(pc);
@@ -2689,6 +2693,7 @@
             try{
                 const pc=new RTCPeerConnection(NET_ICE); netPc=pc;
                 pc.ondatachannel=ev=>netSetupDc(ev.channel);
+                pc.oniceconnectionstatechange=()=>{ if(pc.iceConnectionState==='failed'||pc.iceConnectionState==='disconnected') netDcDrop(); };
                 await pc.setRemoteDescription(JSON.parse(payload));
                 const answer=await pc.createAnswer();
                 await pc.setLocalDescription(answer);
@@ -2704,8 +2709,15 @@
         function netSend(obj){
             if(!onlineRoomId||!authToken) return;
             let s; try{ s=JSON.stringify(obj); }catch(e){ return; }
-            if(netDc&&netDc.readyState==='open'){ try{ netDc.send(s); return; }catch(e){} }
             const kind=obj.t==='s'?'state':(obj.t==='i'?'input':(obj.t==='e'?'end':'ping'));
+            // 结束时同时走中继，直连即使丢包也能保证对方收到结算
+            if(kind==='end') authApi('/rooms/msg',{method:'POST',body:{kind,payload:s}}).catch(()=>{});
+            if(netDc&&netDc.readyState==='open'){
+                // 发送队列堆积说明网络在堵，状态/输入直接丢（下一帧会有更新的），避免延迟越积越高
+                if(kind!=='end'&&netDc.bufferedAmount>8192) return;
+                try{ netDc.send(s); return; }catch(e){}
+            }
+            if(kind==='end') return;
             authApi('/rooms/msg',{method:'POST',body:{kind,payload:s}}).catch(()=>{});
         }
         function handleNetGame(m){
@@ -2864,15 +2876,16 @@
                 if(manualEnt.netTX!=null){
                     const dx=manualEnt.netTX-manualEnt.x, dy=manualEnt.netTY-manualEnt.y;
                     if(Math.hypot(dx,dy)>90){ manualEnt.x=manualEnt.netTX; manualEnt.y=manualEnt.netTY; }
-                    else{ const k=Math.min(1,0.16*dt); manualEnt.x+=dx*k; manualEnt.y+=dy*k; }
+                    else{ const k=Math.min(1,(netMode==='p2p'?0.16:0.32)*dt); manualEnt.x+=dx*k; manualEnt.y+=dy*k; }
                 }
             }
-            // 远端实体：在最近两个快照之间按时间插值（延迟约 60ms），画面平滑且不追着抖
-            const rt=now-60;
+            // 远端实体：在最近两个快照之间按时间插值；中继模式快照更稀，缓冲加大并允许外推，避免一跳一跳
+            const p2p=netMode==='p2p';
+            const rt=now-(p2p?60:150);
             entities.forEach(e=>{
                 if(e===manualEnt||e.netTX==null) return;
                 if(e.netPX!=null&&e.netT>e.netPT&&e.netPT>0){
-                    const f=Math.max(0,Math.min(1.2,(rt-e.netPT)/Math.max(1,e.netT-e.netPT)));
+                    const f=Math.max(0,Math.min(p2p?1.2:2,(rt-e.netPT)/Math.max(1,e.netT-e.netPT)));
                     e.x=e.netPX+(e.netTX-e.netPX)*f;
                     e.y=e.netPY+(e.netTY-e.netPY)*f;
                 }else{
