@@ -2699,7 +2699,7 @@
         }
         function handleNetGame(m){
             if(!m||!onlineStarted) return;
-            if(m.t==='s'){ if(!onlineHost) netApplyStateObject(m); }
+            if(m.t==='s'){ if(!onlineHost) netApplyStateObject(m.d); }
             else if(m.t==='i'){ if(onlineHost) applyGuestInputObject(m); }
             else if(m.t==='e'){ if(!onlineHost) guestFinish(m.w||''); }
         }
@@ -2709,7 +2709,7 @@
             if(!onlineStarted||!payload) return;
             try{
                 if(kind==='input'){ if(onlineHost) applyGuestInputObject(JSON.parse(payload)); }
-                else if(kind==='state'){ if(!onlineHost) netApplyStateObject(JSON.parse(payload)); }
+                else if(kind==='state'){ if(!onlineHost) netApplyStateObject((JSON.parse(payload)||{}).d); }
                 else if(kind==='end'){ if(!onlineHost) guestFinish((JSON.parse(payload)||{}).w||''); }
             }catch(e){}
         }
@@ -3000,7 +3000,7 @@
                     if(m.kind==='state'){ lastState=m.payload; return; }
                     handleRoomMessage(m.kind,m.payload);
                 });
-                if(lastState&&netGuest&&battleActive){ try{ netApplyStateObject(JSON.parse(lastState)); }catch(e){} }
+                if(lastState&&netGuest&&battleActive){ try{ netApplyStateObject((JSON.parse(lastState)||{}).d); }catch(e){} }
                 if(onlineStarted){
                     if(d.room.status!=='battle'&&!onlineEnded) opponentLeft();
                 }else if(d.room.status==='battle'){
