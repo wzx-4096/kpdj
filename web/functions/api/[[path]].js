@@ -27,11 +27,12 @@
 //   POST   /api/support/msg     { body }（客服留言，未登录也可发，登录则记 pid/昵称）
 //   GET    /api/story           （故事进度，Bearer 玩家 token）
 //   POST   /api/story           { clear, hide }（只升不降）
+//   POST   /api/dev/auth        { password }（开发者模式密码，后端校验，前端不保存哈希）
 //   GET    /api/admin/support   （Bearer 管理员 token，客服留言列表）
 //   POST   /api/admin/login     { password }
 //   GET    /api/admin/players   （Bearer 管理员 token）
 //   DELETE /api/admin/players/:pid（Bearer 管理员 token）
-// 环境变量/绑定：DB（D1）、SESSION_SECRET、ADMIN_PASS_HASH、RELAY_SECRET、RELAY_URL、TRTC_SDKAPPID、TRTC_SECRET
+// 环境变量/绑定：DB（D1）、SESSION_SECRET、ADMIN_PASS_HASH、DEV_PASS_HASH、RELAY_SECRET、RELAY_URL、TRTC_SDKAPPID、TRTC_SECRET
 // 密码只存 PBKDF2-SHA256 哈希（pbkdf2$迭代数$盐$哈希），不存明文。
 
 const PBKDF2_ITER = 12000;                                  // Workers 免费版单次 10ms CPU，迭代数不能太高
@@ -892,6 +893,32 @@ async function handleStorySave(request, env) {
   return json({ ok: true, clear, hide });
 }
 
+// ---------- 开发者模式密码（后端校验，前端不再保存任何哈希） ----------
+const devHits = new Map();
+function devLimited(key) {
+  const now = Date.now();
+  const rec = devHits.get(key);
+  if (rec && now - rec.t < 10 * 60000) {
+    rec.n++;
+    if (rec.n > 10) return true;
+  } else devHits.set(key, { t: now, n: 1 });
+  if (devHits.size > 5000) devHits.clear();
+  return false;
+}
+async function handleDevAuth(request, env) {
+  if (!env.DEV_PASS_HASH) return fail('NO_DEV_HASH', '服务端未配置开发者密码', 501);
+  const body = await readJson(request);
+  if (!body) return fail('INVALID_BODY', '请求体必须为 JSON');
+  const password = String(body.password == null ? '' : body.password);
+  if (!password || password.length > 64) return fail('INVALID_CREDENTIALS', '密码错误', 401);
+
+  const key = request.headers.get('cf-connecting-ip') || 'anon';
+  if (devLimited(key)) return fail('TOO_MANY', '尝试太频繁，请稍后再试', 429);
+  if (!(await verifyPassword(password, env.DEV_PASS_HASH))) return fail('INVALID_CREDENTIALS', '密码错误', 401);
+  devHits.delete(key);                                        // 验证成功清空失败计数
+  return json({ ok: true });
+}
+
 // ---------- 管理员 ----------
 async function handleAdminLogin(request, env) {
   if (!env.SESSION_SECRET) return fail('NO_SESSION_SECRET', '服务端未配置 SESSION_SECRET', 500);
@@ -1017,6 +1044,7 @@ export async function onRequest(context) {
     if (path === '/api/support/msg' && method === 'POST') return handleSupportMsg(request, env);
     if (path === '/api/story' && method === 'GET') return handleStoryGet(request, env);
     if (path === '/api/story' && method === 'POST') return handleStorySave(request, env);
+    if (path === '/api/dev/auth' && method === 'POST') return handleDevAuth(request, env);
     if (path === '/api/admin/support' && method === 'GET') return handleAdminSupport(url, request, env);
     if (path === '/api/admin/login' && method === 'POST') return handleAdminLogin(request, env);
     if (path === '/api/admin/players' && method === 'GET') return handleAdminPlayers(url, request, env);

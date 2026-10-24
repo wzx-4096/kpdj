@@ -3547,7 +3547,7 @@
         document.getElementById('chatInput').addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); chatSend(); } });
         document.getElementById('btnChatBack').addEventListener('click',()=>{ sfxClick(); clearInterval(chatTimer); showScreen(document.getElementById('screenFriends')); friendsLoad().catch(()=>{}); });
         setInterval(()=>{ if(authUser) friendsRefreshBadge(); },30000);
-        // ============ 隐藏入口密码（FNV-1a 双轮加盐哈希，明文不落代码；以后加入口只需在 SECRETS 加一行 {h:哈希, fn:动作}） ============
+        // ============ 隐藏入口密码（开发者密码由后端 /api/dev/auth 校验；彩蛋密码仍用 FNV-1a 双轮加盐哈希，明文不落代码） ============
         function fnv1a(s){ let h=0x811c9dc5; for(let i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,0x01000193); } return (h>>>0).toString(16).padStart(8,'0'); }
         function secretHash(s){ const a=fnv1a('kpdj_'+s+'_13!'); return a+fnv1a(a+'_13!'+s+'kpdj_'); }
         // 隐藏彩蛋图片：按扩展名依次尝试加载 public/images/01.*
@@ -3568,7 +3568,7 @@
         }
         if(secretImgOverlay) secretImgOverlay.addEventListener('click',()=>{ sfxClick(); secretImgOverlay.classList.remove('active'); });
         const SECRETS=[
-            { h:'0815c6a90af4904a', fn:()=>{ try{ localStorage.setItem('lightUnlocked','1'); }catch(e){} applyLightSettings(); showScreen(document.getElementById('screenDev')); } }, // 开发者选项
+            // 开发者选项密码改由后端 /api/dev/auth 校验，前端不再保存任何哈希
             { h:'53205b891919f6e7', fn:()=>showSecretImg() } // 隐藏彩蛋：弹出图片文件夹里的 01
         ];
         const modalPwd=document.getElementById('modalPwd'), pwdInput=document.getElementById('pwdInput'), pwdErr=document.getElementById('pwdErr');
@@ -3593,18 +3593,46 @@
                 },290);
             },1180);
         }
-        function submitPwd(){
-            if(authBusy) return;
-            const hit=SECRETS.find(s=>secretHash(pwdInput.value.trim())===s.h);
+        let devAuthBusy=false;
+        async function submitPwd(){
+            if(authBusy||devAuthBusy) return;
+            const v=pwdInput.value.trim();
+            if(!v) return;
+            const hit=SECRETS.find(s=>secretHash(v)===s.h);
             if(hit){
                 closePwdModal();
                 showAuthGranted(()=>hit.fn());
-            }else{
-                pwdErr.textContent='密码错误';
-                pwdInput.classList.remove('shake'); void pwdInput.offsetWidth; pwdInput.classList.add('shake');
-                playSound(140,'sawtooth',0.18,0.12,80);
-                pwdInput.value=''; pwdInput.focus();
+                return;
             }
+            // 开发者密码交给后端校验：前端不保存任何可被离线暴力破解的哈希
+            devAuthBusy=true;
+            const okBtn=document.getElementById('btnPwdOk');
+            okBtn.disabled=true;
+            let passed=false, msg='密码错误';
+            try{
+                const res=await fetch('/api/dev/auth',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({password:v})});
+                if(res.ok) passed=true;
+                else{
+                    const d=await res.json().catch(()=>null);
+                    msg=(d&&d.error&&d.error.message)||msg;
+                }
+            }catch(e){
+                msg='网络异常，无法验证';
+            }finally{
+                devAuthBusy=false;
+                okBtn.disabled=false;
+            }
+            if(passed){
+                try{ localStorage.setItem('lightUnlocked','1'); }catch(e){}
+                applyLightSettings();
+                closePwdModal();
+                showAuthGranted(()=>showScreen(document.getElementById('screenDev')));
+                return;
+            }
+            pwdErr.textContent=msg;
+            pwdInput.classList.remove('shake'); void pwdInput.offsetWidth; pwdInput.classList.add('shake');
+            playSound(140,'sawtooth',0.18,0.12,80);
+            pwdInput.value=''; pwdInput.focus();
         }
         document.getElementById('btnPwdOk').addEventListener('click',submitPwd);
         document.getElementById('btnPwdCancel').addEventListener('click',closePwdModal);
