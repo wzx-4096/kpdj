@@ -19,7 +19,8 @@
         <button class="btn btn-info btn-sm" id="btnFullscreen">⛶ 全屏</button>
         <button class="btn btn-info btn-sm" id="btnSupport">💬 客服</button>
         <button class="btn btn-info btn-sm" id="btnAccount">👤 登录 / 注册</button>
-        <div style="color:#667;font-size:10px;" id="versionLabel">v9.3 · 注册确认密码</div>
+        <button class="btn btn-info btn-sm" id="btnFriends">👫 好友 <span class="badge" id="friendBadge" style="display:none;">0</span></button>
+        <div style="color:#667;font-size:10px;" id="versionLabel">v9.4 · 昵称与好友</div>
     </div>
     <div class="screen" id="screenSupport">
         <div class="game-title" style="font-size:20px;">💬 在线客服</div>
@@ -55,13 +56,92 @@
                 <div style="color:#8a93b8;font-size:10px;margin-top:10px;line-height:1.6;text-align:center;" id="accTip">登录后可在不同设备使用同一账号。</div>
             </div>
             <div id="accProfileView" style="display:none;">
+                <div style="display:flex;justify-content:center;margin-bottom:8px;">
+                    <img class="avatar-lg" id="accAvatar" alt="" style="display:none;">
+                    <div class="avatar-lg avatar-fallback" id="accAvatarFallback">👤</div>
+                </div>
                 <div style="color:#ccd;font-size:12px;text-align:center;">当前账号</div>
                 <div id="accName" style="color:var(--gold);font-size:20px;font-weight:900;text-align:center;margin:6px 0 4px;word-break:break-all;"></div>
                 <div id="accPid" style="color:#667;font-size:10px;text-align:center;margin-bottom:14px;"></div>
+                <button class="btn btn-info btn-sm" id="btnAccSettings" style="width:100%;margin-bottom:8px;">⚙️ 账号设置</button>
                 <button class="btn btn-danger btn-sm" id="btnAccLogout" style="width:100%;">退出登录</button>
             </div>
         </div>
         <button class="btn btn-sm" id="btnAccountBack">⬅ 返回</button>
+    </div>
+    <div class="screen" id="screenAccSettings">
+        <div class="game-title" style="font-size:20px;">👤 账号设置</div>
+        <div class="modal-box" style="width:90%;max-width:360px;max-height:70vh;overflow-y:auto;">
+            <div id="asLoginHint" style="display:none;text-align:center;">
+                <div style="color:#ccd;font-size:12px;margin-bottom:14px;">请先登录后再修改账号资料</div>
+                <button class="btn btn-sm btn-success" id="btnAsGoLogin" style="width:100%;">去登录 / 注册</button>
+            </div>
+            <div id="asBody">
+                <div class="as-avatar-row">
+                    <img class="avatar-lg" id="asAvatar" alt="" style="display:none;">
+                    <div class="avatar-lg avatar-fallback" id="asAvatarFallback">👤</div>
+                    <div style="display:flex;flex-direction:column;gap:6px;">
+                        <button class="btn btn-sm btn-info" id="btnAsUpload" type="button">上传头像</button>
+                        <button class="btn btn-sm" id="btnAsRemoveAvatar" type="button">移除头像</button>
+                    </div>
+                    <input type="file" id="asFile" accept="image/png,image/jpeg,image/webp" style="display:none;">
+                </div>
+                <div class="as-label">昵称</div>
+                <input class="acc-input" id="asNickname" maxlength="16" placeholder="1-16 个字符" autocomplete="off">
+                <div class="pwd-err" id="asNickErr"></div>
+                <button class="btn btn-success btn-sm" id="btnAsSaveNick" style="width:100%;">保存昵称</button>
+                <div class="as-hr"></div>
+                <div class="as-label">修改密码</div>
+                <input class="acc-input" id="asOldPass" type="password" placeholder="当前密码" maxlength="64" autocomplete="current-password">
+                <input class="acc-input" id="asNewPass" type="password" placeholder="新密码（至少 6 位）" maxlength="64" autocomplete="new-password">
+                <input class="acc-input" id="asNewPass2" type="password" placeholder="再次输入新密码" maxlength="64" autocomplete="new-password">
+                <div class="pwd-err" id="asPassErr"></div>
+                <button class="btn btn-success btn-sm" id="btnAsSavePass" style="width:100%;">修改密码</button>
+                <div class="as-hr"></div>
+                <button class="btn btn-danger btn-sm" id="btnAsLogout" style="width:100%;">退出登录</button>
+            </div>
+        </div>
+        <button class="btn btn-sm" id="btnAccSettingsBack">⬅ 返回</button>
+    </div>
+    <div class="screen" id="screenFriends">
+        <div class="game-title" style="font-size:20px;">👫 好友</div>
+        <div class="modal-box" style="width:94%;max-width:400px;height:min(66vh,560px);display:flex;flex-direction:column;padding:10px 12px;overflow:hidden;">
+            <div style="display:flex;gap:8px;justify-content:center;margin-bottom:10px;flex-shrink:0;">
+                <button class="btn btn-sm seg-btn active" id="btnFrTabList" type="button" style="min-width:74px;">好友</button>
+                <button class="btn btn-sm seg-btn" id="btnFrTabReq" type="button" style="min-width:74px;">请求 <span class="badge" id="frReqBadge" style="display:none;">0</span></button>
+                <button class="btn btn-sm seg-btn" id="btnFrTabAdd" type="button" style="min-width:74px;">添加</button>
+            </div>
+            <div id="frListView" style="flex:1;overflow-y:auto;">
+                <div id="frList" class="fr-list"></div>
+                <div class="fr-empty" id="frEmpty">还没有好友，去「添加」搜索账号吧</div>
+            </div>
+            <div id="frReqView" style="flex:1;overflow-y:auto;display:none;">
+                <div class="fr-sub">收到的好友申请</div>
+                <div id="frIncomingList" class="fr-list"></div>
+                <div class="fr-sub" style="margin-top:10px;">我发出的申请</div>
+                <div id="frOutgoingList" class="fr-list"></div>
+            </div>
+            <div id="frAddView" style="flex:1;overflow-y:auto;display:none;">
+                <div style="display:flex;gap:8px;margin-bottom:8px;">
+                    <input class="acc-input" id="frSearchInput" placeholder="搜索账号或昵称" maxlength="20" autocomplete="off" style="margin:0;flex:1;">
+                    <button class="btn btn-sm btn-info" id="btnFrSearch" type="button" style="min-width:64px;">搜索</button>
+                </div>
+                <div id="frSearchList" class="fr-list"></div>
+                <div class="fr-empty" id="frSearchEmpty">输入账号或昵称搜索玩家</div>
+            </div>
+        </div>
+        <button class="btn btn-sm" id="btnFriendsBack">⬅ 返回</button>
+    </div>
+    <div class="screen" id="screenChat">
+        <div class="game-title" style="font-size:18px;" id="chatTitle">聊天</div>
+        <div class="modal-box" style="width:94%;max-width:400px;height:min(66vh,560px);display:flex;flex-direction:column;padding:0;overflow:hidden;">
+            <div id="chatMsgs" class="chat-msgs"></div>
+            <div class="chat-input-bar">
+                <input id="chatInput" placeholder="发消息…" maxlength="500" autocomplete="off">
+                <button id="btnChatSend">发送</button>
+            </div>
+        </div>
+        <button class="btn btn-sm" id="btnChatBack">⬅ 返回好友</button>
     </div>
     <div class="screen" id="screenSettings">
         <div class="game-title" style="font-size:20px;">⚙️ 设置</div>
@@ -73,6 +153,7 @@
             <div style="color:#8a93b8;font-size:10px;padding:2px 2px 6px;border-bottom:1px solid rgba(255,255,255,0.12);">开启后模式选择页以三合一代替自由/双人/大乱斗</div>
         </div>
         <div class="set-item" id="btnJoySetting"><span>🕹️ 摇杆设置</span><span class="arr">›</span></div>
+        <div class="set-item" id="btnAccountSetting"><span>👤 账号设置</span><span class="arr">›</span></div>
         <div class="set-item" id="btnAbout"><span>ℹ️ 关于</span><span class="arr">›</span></div>
         <div class="set-item" id="btnDevSetting" style="display:none;"><span>🛠 开发者选项</span><span class="arr">›</span></div>
         <button class="btn btn-sm" id="btnSettingsBack">⬅ 返回</button>
@@ -135,6 +216,8 @@
         <div class="modal-box" style="width:90%;max-width:320px;">
             <h3>📝 本次更新</h3>
             <div style="color:#ccd;font-size:11px;line-height:1.9;text-align:left;">
+                <div>👫 <b>好友系统</b>：可搜索玩家、发送/接受好友申请、移除好友，好友之间能发私聊消息，未读消息有红点提醒</div>
+                <div>🖼 <b>昵称与头像</b>：账号之外可单独设置昵称和头像；设置 → 账号设置 里能改昵称、换头像、改密码</div>
                 <div>🔒 <b>注册确认密码</b>：注册时需再次输入一次密码，两次一致才能创建账号，避免输错</div>
                 <div>👤 <b>账号系统</b>：主菜单新增登录/注册，账号密码保存在 Cloudflare D1，密码只存哈希不存明文；不需要手机号和验证码</div>
                 <div>😋 <b><span data-role="liukun">刘焜</span>强化</b>：吃食物回血从2点提升到5点，干饭人奶量翻倍多</div>

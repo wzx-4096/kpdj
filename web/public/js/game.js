@@ -240,7 +240,7 @@
 
         // ============ 界面导航 ============
         function showScreen(s){
-            ['screenMenu','screenMode','screenManualSelect','screenFreeSelect','screenDualDraw','screenVS','screenBattle','screenBRSelect','screenTri','screenVictory','screenSettings','screenDev','screenDevStory','screenLight','screenAbout','screenJoySettings','screenStory','screenStoryTest','screenStoryScene','screenDuelInvite','screenDuelIntro','screenStoryResult','screenSupport','screenAccount'].forEach(id=>{
+            ['screenMenu','screenMode','screenManualSelect','screenFreeSelect','screenDualDraw','screenVS','screenBattle','screenBRSelect','screenTri','screenVictory','screenSettings','screenDev','screenDevStory','screenLight','screenAbout','screenJoySettings','screenStory','screenStoryTest','screenStoryScene','screenDuelInvite','screenDuelIntro','screenStoryResult','screenSupport','screenAccount','screenAccSettings','screenFriends','screenChat'].forEach(id=>{
                 const el=document.getElementById(id); if(el) el.classList.remove('active');
             });
             if(s) s.classList.add('active');
@@ -2217,9 +2217,11 @@
             csScroll();
         });
         document.getElementById('btnSupportBack').addEventListener('click',()=>{ sfxClick(); clearTimeout(csTimer); csBusy=false; csSend.style.opacity=''; csSend.style.pointerEvents=''; showScreen(document.getElementById('screenMenu')); });
-        // ============ 账号（Cloudflare Pages Functions + D1，密码只在服务端哈希） ============
+        // ============ 账号 / 资料 / 好友（Cloudflare Pages Functions + D1，密码只在服务端哈希） ============
         const AUTH_TOKEN_KEY='kpdjAuthToken';
         let authToken='', authUser=null, authMode='login';
+        let friendsCache={friends:[],incoming:[],outgoing:[],unread:{total:0,by:{}}}, friendsTab='list';
+        let chatPid='', chatName='', chatLastId=0, chatTimer=null;
         function authRead(){ try{ authToken=localStorage.getItem(AUTH_TOKEN_KEY)||''; }catch(e){ authToken=''; } }
         function authSave(t,u){
             authToken=t||''; authUser=u||null;
@@ -2236,15 +2238,26 @@
             if(!res.ok){ const er=new Error((data&&data.error&&data.error.message)||('请求失败 '+res.status)); er.status=res.status; throw er; }
             return data||{};
         }
+        function displayName(u){ return u?(u.nickname||u.username):''; }
+        function setAvatarEl(imgEl,fbEl,avatar){
+            if(!imgEl) return;
+            if(avatar){ imgEl.src=avatar; imgEl.style.display=''; if(fbEl) fbEl.style.display='none'; }
+            else { imgEl.removeAttribute('src'); imgEl.style.display='none'; if(fbEl) fbEl.style.display=''; }
+        }
         function authRender(){
-            const btn=document.getElementById('btnAccount'); if(btn) btn.textContent=authUser?('👤 '+authUser.username):'👤 登录 / 注册';
+            const btn=document.getElementById('btnAccount'); if(btn) btn.textContent=authUser?('👤 '+displayName(authUser)):'👤 登录 / 注册';
             const av=document.getElementById('accAuthView'), pv=document.getElementById('accProfileView');
             if(av) av.style.display=authUser?'none':'';
             if(pv) pv.style.display=authUser?'':'none';
             if(authUser){
-                const n=document.getElementById('accName'); if(n) n.textContent=authUser.username;
-                const p=document.getElementById('accPid'); if(p) p.textContent='ID '+authUser.pid;
+                const n=document.getElementById('accName'); if(n) n.textContent=displayName(authUser);
+                const p=document.getElementById('accPid'); if(p) p.textContent='@'+authUser.username+' · ID '+authUser.pid;
+                setAvatarEl(document.getElementById('accAvatar'),document.getElementById('accAvatarFallback'),authUser.avatar);
             }
+            if(!authUser){
+                const fb=document.getElementById('friendBadge'); if(fb) fb.style.display='none';
+            }
+            accSettingsFill();
         }
         function authErr(msg){ const el=document.getElementById('accErr'); if(el) el.textContent=msg||''; }
         function authSetMode(m){
@@ -2280,24 +2293,296 @@
                 authSave(data.token,data.user);
                 document.getElementById('accPass').value='';
                 const p2el=document.getElementById('accPass2'); if(p2el) p2el.value='';
-                sfxClick();
+                sfxClick(); friendsRefreshBadge();
             }catch(e){ authErr(e.message); }
             finally{ if(btn) btn.disabled=false; }
         }
         function authInit(){
             authRead(); authRender();
             if(!authToken) return;
-            authApi('/auth/me').then(d=>{ authUser=d.user; authRender(); }).catch(e=>{ if(e.status===401) authSave('',null); });
+            authApi('/auth/me').then(d=>{ authUser=d.user; authRender(); friendsRefreshBadge(); }).catch(e=>{ if(e.status===401) authSave('',null); });
         }
+
+        // ---------- 账号设置 ----------
+        function asMsg(el,text,ok){ if(!el) return; el.textContent=text||''; el.style.color=ok?'#7ee2a8':'#ff6b6b'; }
+        function accSettingsFill(){
+            const body=document.getElementById('asBody'), hint=document.getElementById('asLoginHint');
+            if(body) body.style.display=authUser?'':'none';
+            if(hint) hint.style.display=authUser?'none':'';
+            if(!authUser) return;
+            setAvatarEl(document.getElementById('asAvatar'),document.getElementById('asAvatarFallback'),authUser.avatar);
+            const n=document.getElementById('asNickname'); if(n) n.value=displayName(authUser);
+            ['asOldPass','asNewPass','asNewPass2'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+            asMsg(document.getElementById('asPassErr'),'');
+            asMsg(document.getElementById('asNickErr'),'');
+        }
+        function accSettingsOpen(){
+            if(!authUser){ authErr('请先登录后再进入账号设置'); showScreen(document.getElementById('screenAccount')); authRender(); return; }
+            accSettingsFill();
+            showScreen(document.getElementById('screenAccSettings'));
+        }
+        function compressImage(file,size,quality){
+            return new Promise((resolve,reject)=>{
+                const reader=new FileReader();
+                reader.onload=()=>{
+                    const img=new Image();
+                    img.onload=()=>{
+                        try{
+                            const c=document.createElement('canvas'); c.width=size; c.height=size;
+                            const ctx=c.getContext('2d');
+                            const s=Math.min(img.width,img.height);
+                            ctx.drawImage(img,(img.width-s)/2,(img.height-s)/2,s,s,0,0,size,size);
+                            resolve(c.toDataURL('image/jpeg',quality));
+                        }catch(e){ reject(new Error('图片处理失败')); }
+                    };
+                    img.onerror=()=>reject(new Error('图片读取失败'));
+                    img.src=reader.result;
+                };
+                reader.onerror=()=>reject(new Error('图片读取失败'));
+                reader.readAsDataURL(file);
+            });
+        }
+        async function asUploadAvatar(file){
+            if(!file) return;
+            if(!/^image\//.test(file.type)) return asMsg(document.getElementById('asNickErr'),'请选择图片文件',false);
+            asMsg(document.getElementById('asNickErr'),'正在处理头像…',true);
+            try{
+                const dataUrl=await compressImage(file,128,0.82);
+                const d=await authApi('/auth/profile',{method:'PATCH',body:{avatar:dataUrl}});
+                authUser=d.user; authRender(); asMsg(document.getElementById('asNickErr'),'头像已更新',true); sfxClick();
+            }catch(e){ asMsg(document.getElementById('asNickErr'),e.message,false); }
+        }
+        async function asRemoveAvatar(){
+            if(!authUser) return;
+            try{ const d=await authApi('/auth/profile',{method:'PATCH',body:{avatar:''}}); authUser=d.user; authRender(); asMsg(document.getElementById('asNickErr'),'头像已移除',true); sfxClick(); }
+            catch(e){ asMsg(document.getElementById('asNickErr'),e.message,false); }
+        }
+        async function asSaveNickname(){
+            if(!authUser) return;
+            const inp=document.getElementById('asNickname'), v=(inp.value||'').trim();
+            if(!v) return asMsg(document.getElementById('asNickErr'),'昵称不能为空',false);
+            if(v.length>16) return asMsg(document.getElementById('asNickErr'),'昵称不能超过 16 个字符',false);
+            const btn=document.getElementById('btnAsSaveNick'); if(btn&&btn.disabled) return; if(btn) btn.disabled=true;
+            try{ const d=await authApi('/auth/profile',{method:'PATCH',body:{nickname:v}}); authUser=d.user; authRender(); asMsg(document.getElementById('asNickErr'),'昵称已保存',true); sfxClick(); }
+            catch(e){ asMsg(document.getElementById('asNickErr'),e.message,false); }
+            finally{ if(btn) btn.disabled=false; }
+        }
+        async function asSavePassword(){
+            if(!authUser) return;
+            const oldP=document.getElementById('asOldPass').value||'';
+            const newP=document.getElementById('asNewPass').value||'';
+            const newP2=document.getElementById('asNewPass2').value||'';
+            if(!oldP) return asMsg(document.getElementById('asPassErr'),'请输入当前密码',false);
+            if(newP.length<6||newP.length>64) return asMsg(document.getElementById('asPassErr'),'新密码需为 6-64 位',false);
+            if(newP!==newP2) return asMsg(document.getElementById('asPassErr'),'两次输入的新密码不一致',false);
+            const btn=document.getElementById('btnAsSavePass'); if(btn&&btn.disabled) return; if(btn) btn.disabled=true;
+            try{
+                await authApi('/auth/password',{method:'POST',body:{oldPassword:oldP,newPassword:newP}});
+                ['asOldPass','asNewPass','asNewPass2'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+                asMsg(document.getElementById('asPassErr'),'密码已修改',true); sfxClick();
+            }catch(e){ asMsg(document.getElementById('asPassErr'),e.message,false); }
+            finally{ if(btn) btn.disabled=false; }
+        }
+
+        // ---------- 好友 ----------
+        function frAvatarEl(item){
+            if(item&&item.avatar){ const im=document.createElement('img'); im.className='fr-avatar'; im.src=item.avatar; im.alt=''; return im; }
+            const d=document.createElement('div'); d.className='fr-avatar-fallback';
+            d.textContent=String((item&&(item.nickname||item.username))||'?').slice(0,1);
+            return d;
+        }
+        function frBtn(label,cls,fn){
+            const b=document.createElement('button'); b.type='button'; b.className='fr-btn'+(cls?' '+cls:''); b.textContent=label;
+            b.addEventListener('click',ev=>{ ev.stopPropagation(); sfxClick(); fn(b); });
+            return b;
+        }
+        function frRow(item,subText,actions){
+            const row=document.createElement('div'); row.className='fr-row';
+            row.appendChild(frAvatarEl(item));
+            const main=document.createElement('div'); main.className='fr-main';
+            const nm=document.createElement('div'); nm.className='fr-name'; nm.textContent=displayName(item);
+            const sb=document.createElement('div'); sb.className='fr-subline'; sb.textContent=subText||('@'+item.username);
+            main.appendChild(nm); main.appendChild(sb); row.appendChild(main);
+            if(actions&&actions.length){ const act=document.createElement('div'); act.className='fr-actions'; actions.forEach(a=>act.appendChild(a)); row.appendChild(act); }
+            return row;
+        }
+        function updateFriendBadges(){
+            const total=(friendsCache.unread&&friendsCache.unread.total)||0;
+            const fb=document.getElementById('friendBadge'); if(fb){ fb.textContent=total; fb.style.display=authUser&&total?'':'none'; }
+            const inc=(friendsCache.incoming||[]).length;
+            const rb=document.getElementById('frReqBadge'); if(rb){ rb.textContent=inc; rb.style.display=inc?'':'none'; }
+        }
+        async function friendsRefreshBadge(){
+            if(!authUser){ const fb=document.getElementById('friendBadge'); if(fb) fb.style.display='none'; return; }
+            try{ const d=await authApi('/messages/unread'); const fb=document.getElementById('friendBadge'); if(fb){ fb.textContent=d.total||0; fb.style.display=d.total?'':'none'; } }catch(e){}
+        }
+        async function friendsLoad(){
+            if(!authUser) return;
+            const d=await authApi('/friends');
+            friendsCache={friends:d.friends||[],incoming:d.incoming||[],outgoing:d.outgoing||[],unread:d.unread||{total:0,by:{}}};
+            renderFriends(); updateFriendBadges();
+        }
+        function renderFriends(){
+            const list=document.getElementById('frList'); if(!list) return;
+            list.innerHTML='';
+            const items=friendsCache.friends||[];
+            const empty=document.getElementById('frEmpty');
+            if(empty){ empty.textContent='还没有好友，去「添加」搜索账号吧'; empty.style.display=items.length?'none':''; }
+            items.forEach(f=>{
+                const del=frBtn('删除','danger',async b=>{
+                    if(!confirm('确定删除好友「'+displayName(f)+'」吗？')) return;
+                    b.disabled=true;
+                    try{ await authApi('/friends/'+encodeURIComponent(f.pid),{method:'DELETE'}); friendsLoad(); }
+                    catch(e){ alert(e.message); b.disabled=false; }
+                });
+                const chat=frBtn('聊天','primary',()=>chatOpen(f.pid,displayName(f)));
+                const row=frRow(f,'@'+f.username+(f.unread?' · '+f.unread+' 条未读':''),[chat,del]);
+                row.style.cursor='pointer';
+                row.addEventListener('click',()=>chatOpen(f.pid,displayName(f)));
+                list.appendChild(row);
+            });
+
+            const incList=document.getElementById('frIncomingList');
+            if(incList){
+                incList.innerHTML='';
+                (friendsCache.incoming||[]).forEach(f=>{
+                    const accept=frBtn('接受','primary',async b=>{ b.disabled=true; try{ await authApi('/friends/accept',{method:'POST',body:{pid:f.pid}}); friendsLoad(); }catch(e){ alert(e.message); b.disabled=false; } });
+                    const reject=frBtn('拒绝','',async b=>{ b.disabled=true; try{ await authApi('/friends/reject',{method:'POST',body:{pid:f.pid}}); friendsLoad(); }catch(e){ alert(e.message); b.disabled=false; } });
+                    incList.appendChild(frRow(f,'请求加你为好友',[accept,reject]));
+                });
+                if(!(friendsCache.incoming||[]).length){ const e=document.createElement('div'); e.className='fr-empty'; e.textContent='暂无新的好友申请'; incList.appendChild(e); }
+            }
+            const outList=document.getElementById('frOutgoingList');
+            if(outList){
+                outList.innerHTML='';
+                (friendsCache.outgoing||[]).forEach(f=>{
+                    const cancel=frBtn('撤回','',async b=>{ b.disabled=true; try{ await authApi('/friends/'+encodeURIComponent(f.pid),{method:'DELETE'}); friendsLoad(); }catch(e){ alert(e.message); b.disabled=false; } });
+                    outList.appendChild(frRow(f,'等待对方接受',[cancel]));
+                });
+                if(!(friendsCache.outgoing||[]).length){ const e=document.createElement('div'); e.className='fr-empty'; e.textContent='暂无已发送的申请'; outList.appendChild(e); }
+            }
+        }
+        function friendsSetTab(tab){
+            friendsTab=tab;
+            [['list','btnFrTabList','frListView'],['req','btnFrTabReq','frReqView'],['add','btnFrTabAdd','frAddView']].forEach(p=>{
+                const b=document.getElementById(p[1]); if(b) b.classList.toggle('active',p[0]===tab);
+                const v=document.getElementById(p[2]); if(v) v.style.display=p[0]===tab?'':'none';
+            });
+        }
+        function friendsOpen(){
+            if(!authUser){ authErr('请先登录后使用好友功能'); showScreen(document.getElementById('screenAccount')); return; }
+            friendsSetTab('list');
+            showScreen(document.getElementById('screenFriends'));
+            friendsLoad().catch(e=>{
+                const empty=document.getElementById('frEmpty'); if(empty){ empty.textContent=e.message; empty.style.display=''; }
+            });
+        }
+        async function friendsSearch(){
+            const q=(document.getElementById('frSearchInput').value||'').trim();
+            const list=document.getElementById('frSearchList'), empty=document.getElementById('frSearchEmpty');
+            if(!q){ if(empty){ empty.textContent='输入账号或昵称搜索玩家'; empty.style.display=''; } if(list) list.innerHTML=''; return; }
+            if(list) list.innerHTML='';
+            if(empty){ empty.textContent='搜索中…'; empty.style.display=''; }
+            try{
+                const d=await authApi('/users/search?q='+encodeURIComponent(q));
+                if(list) list.innerHTML='';
+                const users=d.users||[];
+                if(empty){ empty.textContent='没有找到相关玩家'; empty.style.display=users.length?'none':''; }
+                users.forEach(u=>{
+                    let actions=[];
+                    if(u.relation==='none'){
+                        actions=[frBtn('加好友','primary',async b=>{ b.disabled=true; try{ await authApi('/friends/request',{method:'POST',body:{pid:u.pid}}); friendsLoad(); friendsSearch(); }catch(e){ alert(e.message); b.disabled=false; } })];
+                    } else if(u.relation==='outgoing'){
+                        actions=[frBtn('已申请','',()=>{})];
+                    } else if(u.relation==='incoming'){
+                        actions=[frBtn('接受','primary',async b=>{ b.disabled=true; try{ await authApi('/friends/accept',{method:'POST',body:{pid:u.pid}}); friendsLoad(); friendsSearch(); }catch(e){ alert(e.message); b.disabled=false; } }),frBtn('拒绝','',async b=>{ b.disabled=true; try{ await authApi('/friends/reject',{method:'POST',body:{pid:u.pid}}); friendsLoad(); friendsSearch(); }catch(e){ alert(e.message); b.disabled=false; } })];
+                    } else {
+                        actions=[frBtn('已是好友','',()=>{})];
+                    }
+                    if(list) list.appendChild(frRow(u,u.relation==='friend'?'已是好友':('@'+u.username),actions));
+                });
+            }catch(e){ if(empty){ empty.textContent=e.message; empty.style.display=''; } }
+        }
+
+        // ---------- 聊天 ----------
+        function chatTime(ts){ const d=new Date((ts||0)*1000); const p=n=>String(n).padStart(2,'0'); return p(d.getHours())+':'+p(d.getMinutes()); }
+        async function chatOpen(pid,name){
+            if(!authUser) return;
+            chatPid=pid; chatName=name||''; chatLastId=0;
+            const t=document.getElementById('chatTitle'); if(t) t.textContent='💬 '+chatName;
+            const box=document.getElementById('chatMsgs'); if(box) box.innerHTML='<div class="chat-empty">加载中…</div>';
+            showScreen(document.getElementById('screenChat'));
+            try{ await chatLoad(true); }catch(e){ if(box){ box.innerHTML=''; const d=document.createElement('div'); d.className='chat-empty'; d.textContent=e.message; box.appendChild(d); } }
+            clearInterval(chatTimer);
+            chatTimer=setInterval(()=>{ if(document.getElementById('screenChat').classList.contains('active')) chatLoad(false).catch(()=>{}); },3000);
+        }
+        async function chatLoad(reset){
+            if(!authUser||!chatPid) return;
+            const d=await authApi('/messages?with='+encodeURIComponent(chatPid)+(chatLastId?'&after='+chatLastId:''));
+            const list=d.messages||[];
+            const box=document.getElementById('chatMsgs'); if(!box) return;
+            if(reset) box.innerHTML='';
+            if(!list.length && reset){ const e=document.createElement('div'); e.className='chat-empty'; e.textContent='还没有消息，打个招呼吧'; box.appendChild(e); }
+            if(list.length){ const e=box.querySelector('.chat-empty'); if(e) e.remove(); }
+            list.forEach(m=>{
+                chatLastId=Math.max(chatLastId,m.id);
+                const row=document.createElement('div'); row.className='msg-row '+(m.from_pid===authUser.pid?'mine':'theirs');
+                const b=document.createElement('div'); b.className='msg-bubble'; b.textContent=m.body;
+                const t=document.createElement('span'); t.className='msg-time'; t.textContent=chatTime(m.created_at); b.appendChild(t);
+                row.appendChild(b); box.appendChild(row);
+            });
+            if(list.length) box.scrollTop=box.scrollHeight;
+            friendsRefreshBadge();
+        }
+        function chatError(msg){
+            const box=document.getElementById('chatMsgs'); if(!box) return;
+            const e=document.createElement('div'); e.className='chat-empty'; e.style.color='#ff6b6b'; e.textContent=msg;
+            box.appendChild(e); box.scrollTop=box.scrollHeight;
+            setTimeout(()=>{ if(e.parentNode) e.parentNode.removeChild(e); },2600);
+        }
+        async function chatSend(){
+            if(!authUser||!chatPid) return;
+            const inp=document.getElementById('chatInput'); if(!inp) return;
+            const v=(inp.value||'').trim();
+            if(!v) return;
+            if(v.length>500) return chatError('消息不能超过 500 字');
+            const btn=document.getElementById('btnChatSend'); if(btn&&btn.disabled) return; if(btn) btn.disabled=true;
+            try{ await authApi('/messages',{method:'POST',body:{to:chatPid,body:v}}); inp.value=''; await chatLoad(false); }
+            catch(e){ chatError(e.message); }
+            finally{ if(btn) btn.disabled=false; }
+        }
+
         document.getElementById('btnAccount').addEventListener('click',()=>{ sfxClick(); authErr(''); authRender(); showScreen(document.getElementById('screenAccount')); });
         document.getElementById('btnAccountBack').addEventListener('click',()=>{ sfxClick(); showScreen(document.getElementById('screenMenu')); });
         document.getElementById('btnAccTabLogin').addEventListener('click',()=>{ sfxClick(); authSetMode('login'); });
         document.getElementById('btnAccTabReg').addEventListener('click',()=>{ sfxClick(); authSetMode('reg'); });
         document.getElementById('btnAccSubmit').addEventListener('click',authSubmit);
-        document.getElementById('btnAccLogout').addEventListener('click',()=>{ sfxClick(); authSave('',null); authErr(''); });
+        document.getElementById('btnAccLogout').addEventListener('click',()=>{ sfxClick(); authSave('',null); authErr(''); friendsCache={friends:[],incoming:[],outgoing:[],unread:{total:0,by:{}}}; });
         document.getElementById('accPass').addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); authSubmit(); } });
         document.getElementById('accPass2').addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); authSubmit(); } });
         document.getElementById('accUser').addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); document.getElementById('accPass').focus(); } });
+        document.getElementById('btnAccSettings').addEventListener('click',()=>{ sfxClick(); accSettingsOpen(); });
+        document.getElementById('btnAccountSetting').addEventListener('click',()=>{ sfxClick(); accSettingsOpen(); });
+        document.getElementById('btnAccSettingsBack').addEventListener('click',()=>{ sfxClick(); showScreen(document.getElementById('screenSettings')); });
+        document.getElementById('btnAsGoLogin').addEventListener('click',()=>{ sfxClick(); authErr(''); showScreen(document.getElementById('screenAccount')); });
+        document.getElementById('btnAsUpload').addEventListener('click',()=>{ sfxClick(); document.getElementById('asFile').click(); });
+        document.getElementById('asFile').addEventListener('change',e=>{ const f=e.target.files&&e.target.files[0]; asUploadAvatar(f); e.target.value=''; });
+        document.getElementById('btnAsRemoveAvatar').addEventListener('click',asRemoveAvatar);
+        document.getElementById('btnAsSaveNick').addEventListener('click',asSaveNickname);
+        document.getElementById('btnAsSavePass').addEventListener('click',asSavePassword);
+        document.getElementById('btnAsLogout').addEventListener('click',()=>{ sfxClick(); authSave('',null); friendsCache={friends:[],incoming:[],outgoing:[],unread:{total:0,by:{}}}; showScreen(document.getElementById('screenMenu')); });
+        document.getElementById('asNickname').addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); asSaveNickname(); } });
+        document.getElementById('btnFriends').addEventListener('click',()=>{ sfxClick(); friendsOpen(); });
+        document.getElementById('btnFriendsBack').addEventListener('click',()=>{ sfxClick(); showScreen(document.getElementById('screenMenu')); });
+        document.getElementById('btnFrTabList').addEventListener('click',()=>{ sfxClick(); friendsSetTab('list'); });
+        document.getElementById('btnFrTabReq').addEventListener('click',()=>{ sfxClick(); friendsSetTab('req'); friendsLoad().catch(()=>{}); });
+        document.getElementById('btnFrTabAdd').addEventListener('click',()=>{ sfxClick(); friendsSetTab('add'); });
+        document.getElementById('btnFrSearch').addEventListener('click',friendsSearch);
+        document.getElementById('frSearchInput').addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); friendsSearch(); } });
+        document.getElementById('btnChatSend').addEventListener('click',chatSend);
+        document.getElementById('chatInput').addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); chatSend(); } });
+        document.getElementById('btnChatBack').addEventListener('click',()=>{ sfxClick(); clearInterval(chatTimer); showScreen(document.getElementById('screenFriends')); friendsLoad().catch(()=>{}); });
+        setInterval(()=>{ if(authUser) friendsRefreshBadge(); },30000);
         // ============ 隐藏入口密码（FNV-1a 双轮加盐哈希，明文不落代码；以后加入口只需在 SECRETS 加一行 {h:哈希, fn:动作}） ============
         function fnv1a(s){ let h=0x811c9dc5; for(let i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,0x01000193); } return (h>>>0).toString(16).padStart(8,'0'); }
         function secretHash(s){ const a=fnv1a('kpdj_'+s+'_13!'); return a+fnv1a(a+'_13!'+s+'kpdj_'); }
