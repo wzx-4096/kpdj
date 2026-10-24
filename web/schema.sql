@@ -52,3 +52,31 @@ CREATE TABLE IF NOT EXISTS messages (
 
 CREATE INDEX IF NOT EXISTS idx_msg_from ON messages(from_pid, to_pid, id);
 CREATE INDEX IF NOT EXISTS idx_msg_to ON messages(to_pid, read_at, id);
+
+-- 联机房间（好友之间开房对战）
+CREATE TABLE IF NOT EXISTS rooms (
+  id         TEXT PRIMARY KEY,              -- 6 位房间码（大写字母数字，避开易混字符）
+  host_pid   TEXT NOT NULL,
+  guest_pid  TEXT,
+  status     TEXT NOT NULL,                 -- waiting | picking | battle | ended
+  host_role  TEXT,
+  guest_role TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_rooms_host ON rooms(host_pid, status);
+CREATE INDEX IF NOT EXISTS idx_rooms_guest ON rooms(guest_pid, status);
+CREATE INDEX IF NOT EXISTS idx_rooms_status ON rooms(status, updated_at);
+
+-- 房间消息：WebRTC 信令 + 中继对局数据
+CREATE TABLE IF NOT EXISTS room_msgs (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  room_id    TEXT NOT NULL,
+  from_pid   TEXT NOT NULL,
+  kind       TEXT NOT NULL,                 -- offer | answer | input | state | end | ping ...
+  payload    TEXT,
+  created_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_room_msgs ON room_msgs(room_id, id);

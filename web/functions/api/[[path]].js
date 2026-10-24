@@ -15,6 +15,13 @@
 //   GET    /api/messages?with=&after=
 //   POST   /api/messages        { to, body }
 //   GET    /api/messages/unread
+//   POST   /api/rooms/create
+//   GET    /api/rooms/poll?after=
+//   POST   /api/rooms/join      { id }
+//   POST   /api/rooms/role      { roleId }
+//   POST   /api/rooms/leave
+//   POST   /api/rooms/signal    { kind, payload }
+//   POST   /api/rooms/msg       { kind, payload }
 //   POST   /api/admin/login     { password }
 //   GET    /api/admin/players   （Bearer 管理员 token）
 //   DELETE /api/admin/players/:pid（Bearer 管理员 token）
@@ -355,6 +362,16 @@ async function handleFriends(request, env) {
   friends.forEach(f => { f.unread = by[f.pid] || 0; });
 
   friends.sort((a, b) => (b.unread - a.unread) || a.nickname.localeCompare(b.nickname, 'zh'));
+
+  // 好友当前可加入的房间（仅 waiting、无 guest、30 分钟内创建）
+  if (friends.length) {
+    const roomRows = await env.DB.prepare(
+      "SELECT id, host_pid FROM rooms WHERE status = 'waiting' AND guest_pid IS NULL AND created_at > ?"
+    ).bind(nowSec() - 1800).all();
+    const roomBy = {};
+    ((roomRows && roomRows.results) || []).forEach(r => { roomBy[r.host_pid] = { id: r.id, status: 'waiting' }; });
+    friends.forEach(f => { if (roomBy[f.pid]) f.room = roomBy[f.pid]; });
+  }
   return json({ friends, incoming, outgoing, unread: { total, by } });
 }
 
@@ -496,6 +513,201 @@ async function handleMessagesUnread(request, env) {
   return json({ total, by });
 }
 
+// ---------- 联机房间 ----------
+const ROOM_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';   // 去掉 I O 0 1，避免口头/手抄混淆
+const ROOM_ROLE_RE = /^[A-Za-z0-9_]{1,24}$/;
+const ROOM_PAYLOAD_MAX = 16384;
+const ROOM_MSG_KINDS = new Set(['input', 'state', 'end', 'ping', 'leave']);
+
+function randomRoomId() {
+  const bytes = crypto.getRandomValues(new Uint8Array(6));
+  let s = '';
+  for (let i = 0; i < 6; i++) s += ROOM_ALPHABET[bytes[i] % ROOM_ALPHABET.length];
+  return s;
+}
+async function activeRoomOf(env, me) {
+  return env.DB.prepare(
+    "SELECT * FROM rooms WHERE (host_pid = ? OR guest_pid = ?) AND status != 'ended' ORDER BY updated_at DESC LIMIT 1"
+  ).bind(me, me).first();
+}
+async function roomById(env, id) {
+  return env.DB.prepare('SELECT * FROM rooms WHERE id = ?').bind(id).first();
+}
+async function roomPublic(env, room, me) {
+  if (!room) return null;
+  const rows = await env.DB.prepare(
+    'SELECT pid, username, nickname, avatar FROM players WHERE pid = ? OR pid = ?'
+  ).bind(room.host_pid, room.guest_pid || '').all();
+  const map = {};
+  ((rows && rows.results) || []).forEach(r => { map[r.pid] = publicUser(r); });
+  const you = room.host_pid === me ? 'host' : 'guest';
+  const revealAll = room.status === 'battle';                 // 开战后双方角色才公开
+  const hostP = map[room.host_pid] || { pid: room.host_pid, username: '?', nickname: '?', avatar: '' };
+  const guestP = room.guest_pid ? (map[room.guest_pid] || { pid: room.guest_pid, username: '?', nickname: '?', avatar: '' }) : null;
+  return {
+    id: room.id, status: room.status, you,
+    host: {
+      pid: hostP.pid, username: hostP.username, nickname: hostP.nickname, avatar: hostP.avatar,
+      picked: !!room.host_role,
+      role: (you === 'host' || revealAll) ? (room.host_role || null) : null
+    },
+    guest: guestP ? {
+      pid: guestP.pid, username: guestP.username, nickname: guestP.nickname, avatar: guestP.avatar,
+      picked: !!room.guest_role,
+      role: (you === 'guest' || revealAll) ? (room.guest_role || null) : null
+    } : null
+  };
+}
+
+async function handleRoomCreate(request, env) {
+  const auth = await requirePlayer(request, env);
+  if (auth.error) return auth.error;
+  const me = auth.user.pid, now = nowSec();
+
+  await env.DB.batch([
+    env.DB.prepare("UPDATE rooms SET status = 'ended', updated_at = ? WHERE host_pid = ? AND status != 'ended'").bind(now, me),
+    env.DB.prepare("UPDATE rooms SET guest_pid = NULL, guest_role = NULL, status = 'waiting', updated_at = ? WHERE guest_pid = ? AND status != 'ended'").bind(now, me),
+    env.DB.prepare('DELETE FROM room_msgs WHERE created_at < ?').bind(now - 3600),
+    env.DB.prepare("DELETE FROM rooms WHERE status = 'ended' AND updated_at < ?").bind(now - 3600)
+  ]);
+
+  let id = '';
+  for (let i = 0; i < 8 && !id; i++) {
+    const code = randomRoomId();
+    const exists = await env.DB.prepare('SELECT id FROM rooms WHERE id = ?').bind(code).first();
+    if (!exists) id = code;
+  }
+  if (!id) return fail('ROOM_CODE_FULL', '房间码生成失败，请重试', 500);
+
+  await env.DB.prepare(
+    "INSERT INTO rooms (id, host_pid, guest_pid, status, host_role, guest_role, created_at, updated_at) VALUES (?, ?, NULL, 'waiting', NULL, NULL, ?, ?)"
+  ).bind(id, me, now, now).run();
+  return json({ room: await roomPublic(env, await roomById(env, id), me) }, 201);
+}
+
+async function handleRoomPoll(url, request, env) {
+  const auth = await requirePlayer(request, env);
+  if (auth.error) return auth.error;
+  const me = auth.user.pid;
+  const after = parseInt(url.searchParams.get('after'), 10) || 0;
+
+  const room = await activeRoomOf(env, me);
+  if (!room) return json({ room: null, msgs: [] });
+  const rows = await env.DB.prepare(
+    'SELECT id, from_pid, kind, payload, created_at FROM room_msgs WHERE room_id = ? AND id > ? ORDER BY id ASC LIMIT 80'
+  ).bind(room.id, after).all();
+  const msgs = ((rows && rows.results) || []).map(r => ({
+    id: r.id, from_pid: r.from_pid, kind: r.kind, payload: r.payload || '', created_at: r.created_at
+  }));
+  return json({ room: await roomPublic(env, room, me), msgs });
+}
+
+async function handleRoomJoin(request, env) {
+  const auth = await requirePlayer(request, env);
+  if (auth.error) return auth.error;
+  const me = auth.user.pid;
+  const body = await readJson(request);
+  if (!body) return fail('INVALID_BODY', '请求体必须为 JSON');
+  const id = String(body.id == null ? '' : body.id).trim().toUpperCase();
+  if (!/^[A-Z0-9]{6}$/.test(id)) return fail('INVALID_ROOM', '房间码格式不正确');
+
+  const room = await roomById(env, id);
+  if (!room || room.status === 'ended') return fail('ROOM_NOT_FOUND', '房间不存在或已解散', 404);
+  if (room.host_pid === me) return fail('OWN_ROOM', '这是你自己创建的房间');
+  if (room.status !== 'waiting' || room.guest_pid) return fail('ROOM_FULL', '房间已满或已开始', 409);
+  if (!(await areFriends(env, me, room.host_pid))) return fail('NOT_FRIENDS', '只能加入好友创建的房间', 403);
+
+  const now = nowSec();
+  await env.DB.batch([
+    env.DB.prepare("UPDATE rooms SET status = 'ended', updated_at = ? WHERE host_pid = ? AND status != 'ended'").bind(now, me),
+    env.DB.prepare("UPDATE rooms SET guest_pid = NULL, guest_role = NULL, status = 'waiting', updated_at = ? WHERE guest_pid = ? AND status != 'ended'").bind(now, me),
+    env.DB.prepare("UPDATE rooms SET guest_pid = ?, guest_role = NULL, status = 'picking', updated_at = ? WHERE id = ? AND status = 'waiting' AND guest_pid IS NULL").bind(me, now, id),
+    env.DB.prepare('DELETE FROM room_msgs WHERE room_id = ?').bind(id)
+  ]);
+
+  const updated = await roomById(env, id);
+  if (!updated || updated.guest_pid !== me) return fail('ROOM_FULL', '房间已被其他玩家加入', 409);
+  return json({ room: await roomPublic(env, updated, me) });
+}
+
+async function handleRoomRole(request, env) {
+  const auth = await requirePlayer(request, env);
+  if (auth.error) return auth.error;
+  const me = auth.user.pid;
+  const body = await readJson(request);
+  if (!body) return fail('INVALID_BODY', '请求体必须为 JSON');
+  const roleId = String(body.roleId == null ? '' : body.roleId);
+  if (!ROOM_ROLE_RE.test(roleId)) return fail('INVALID_ROLE', '角色编号非法');
+
+  const room = await activeRoomOf(env, me);
+  if (!room) return fail('ROOM_NOT_FOUND', '你不在任何房间中', 404);
+  if (room.status === 'battle') return fail('ALREADY_STARTED', '对战已经开始', 409);
+
+  const you = room.host_pid === me ? 'host' : 'guest';
+  const hostRole = you === 'host' ? roleId : room.host_role;
+  const guestRole = you === 'guest' ? roleId : room.guest_role;
+  const status = room.guest_pid && hostRole && guestRole ? 'battle' : (room.guest_pid ? 'picking' : 'waiting');
+
+  await env.DB.prepare('UPDATE rooms SET host_role = ?, guest_role = ?, status = ?, updated_at = ? WHERE id = ?')
+    .bind(hostRole, guestRole, status, nowSec(), room.id).run();
+  return json({ room: await roomPublic(env, await roomById(env, room.id), me) });
+}
+
+async function handleRoomLeave(request, env) {
+  const auth = await requirePlayer(request, env);
+  if (auth.error) return auth.error;
+  const room = await activeRoomOf(env, auth.user.pid);
+  if (!room) return json({ ok: true });
+  const now = nowSec();
+
+  if (room.host_pid === auth.user.pid) {
+    await env.DB.batch([
+      env.DB.prepare("UPDATE rooms SET status = 'ended', updated_at = ? WHERE id = ?").bind(now, room.id),
+      env.DB.prepare('DELETE FROM room_msgs WHERE room_id = ?').bind(room.id)
+    ]);
+  } else {
+    await env.DB.batch([
+      env.DB.prepare("UPDATE rooms SET guest_pid = NULL, guest_role = NULL, status = 'waiting', updated_at = ? WHERE id = ?").bind(now, room.id),
+      env.DB.prepare('DELETE FROM room_msgs WHERE room_id = ?').bind(room.id)
+    ]);
+  }
+  return json({ ok: true });
+}
+
+async function handleRoomSignal(request, env) {
+  const auth = await requirePlayer(request, env);
+  if (auth.error) return auth.error;
+  const body = await readJson(request);
+  if (!body) return fail('INVALID_BODY', '请求体必须为 JSON');
+  const kind = String(body.kind == null ? '' : body.kind);
+  if (kind !== 'offer' && kind !== 'answer') return fail('INVALID_KIND', '信令类型非法');
+  const payload = String(body.payload == null ? '' : body.payload);
+  if (!payload || payload.length > ROOM_PAYLOAD_MAX) return fail('INVALID_PAYLOAD', '信令内容为空或过大', 413);
+
+  const room = await activeRoomOf(env, auth.user.pid);
+  if (!room || !room.guest_pid) return fail('ROOM_NOT_FOUND', '房间不存在或对方未加入', 404);
+  await env.DB.prepare('INSERT INTO room_msgs (room_id, from_pid, kind, payload, created_at) VALUES (?, ?, ?, ?, ?)')
+    .bind(room.id, auth.user.pid, kind, payload, nowSec()).run();
+  return json({ ok: true });
+}
+
+async function handleRoomMsg(request, env) {
+  const auth = await requirePlayer(request, env);
+  if (auth.error) return auth.error;
+  const body = await readJson(request);
+  if (!body) return fail('INVALID_BODY', '请求体必须为 JSON');
+  const kind = String(body.kind == null ? '' : body.kind);
+  if (!ROOM_MSG_KINDS.has(kind)) return fail('INVALID_KIND', '消息类型非法');
+  const payload = String(body.payload == null ? '' : body.payload);
+  if (!payload || payload.length > ROOM_PAYLOAD_MAX) return fail('INVALID_PAYLOAD', '消息内容为空或过大', 413);
+
+  const room = await activeRoomOf(env, auth.user.pid);
+  if (!room || !room.guest_pid) return fail('ROOM_NOT_FOUND', '房间不存在或对方未加入', 404);
+  await env.DB.prepare('INSERT INTO room_msgs (room_id, from_pid, kind, payload, created_at) VALUES (?, ?, ?, ?, ?)')
+    .bind(room.id, auth.user.pid, kind, payload, nowSec()).run();
+  return json({ ok: true });
+}
+
 // ---------- 管理员 ----------
 async function handleAdminLogin(request, env) {
   if (!env.SESSION_SECRET) return fail('NO_SESSION_SECRET', '服务端未配置 SESSION_SECRET', 500);
@@ -533,12 +745,39 @@ async function handleAdminDelete(pid, request, env) {
   await env.DB.batch([
     env.DB.prepare('DELETE FROM messages WHERE from_pid = ? OR to_pid = ?').bind(pid, pid),
     env.DB.prepare('DELETE FROM friendships WHERE pid_a = ? OR pid_b = ?').bind(pid, pid),
+    env.DB.prepare('DELETE FROM room_msgs WHERE from_pid = ?').bind(pid),
+    env.DB.prepare('DELETE FROM rooms WHERE host_pid = ?').bind(pid),
+    env.DB.prepare("UPDATE rooms SET guest_pid = NULL, guest_role = NULL, status = 'waiting', updated_at = ? WHERE guest_pid = ?").bind(nowSec(), pid),
     env.DB.prepare('DELETE FROM leaderboard WHERE pid = ?').bind(pid),
     env.DB.prepare('DELETE FROM players WHERE pid = ?').bind(pid)
   ]);
   const gone = await env.DB.prepare('SELECT pid FROM players WHERE pid = ?').bind(pid).first();
   if (gone) return fail('DELETE_FAILED', '删除失败，请重试', 500);
   return json({ ok: true });
+}
+
+// 一次性建表（固定 DDL，管理员 token 才能调用；可重复执行）
+async function handleAdminMigrate(request, env) {
+  if (!env.DB) return fail('DB_NOT_BOUND', 'D1 数据库未绑定', 500);
+  const auth = await requireAdmin(request, env);
+  if (auth.error) return auth.error;
+
+  const ddl = [
+    `CREATE TABLE IF NOT EXISTS rooms (
+      id TEXT PRIMARY KEY, host_pid TEXT NOT NULL, guest_pid TEXT, status TEXT NOT NULL,
+      host_role TEXT, guest_role TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+    )`,
+    'CREATE INDEX IF NOT EXISTS idx_rooms_host ON rooms(host_pid, status)',
+    'CREATE INDEX IF NOT EXISTS idx_rooms_guest ON rooms(guest_pid, status)',
+    'CREATE INDEX IF NOT EXISTS idx_rooms_status ON rooms(status, updated_at)',
+    `CREATE TABLE IF NOT EXISTS room_msgs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, room_id TEXT NOT NULL, from_pid TEXT NOT NULL,
+      kind TEXT NOT NULL, payload TEXT, created_at INTEGER NOT NULL
+    )`,
+    'CREATE INDEX IF NOT EXISTS idx_room_msgs ON room_msgs(room_id, id)'
+  ];
+  for (const sql of ddl) await env.DB.prepare(sql).run();
+  return json({ ok: true, applied: ddl.length });
 }
 
 async function handleHealth(env) {
@@ -573,8 +812,16 @@ export async function onRequest(context) {
     if (path === '/api/messages/unread' && method === 'GET') return handleMessagesUnread(request, env);
     if (path === '/api/messages' && method === 'GET') return handleMessagesGet(url, request, env);
     if (path === '/api/messages' && method === 'POST') return handleMessageSend(request, env);
+    if (path === '/api/rooms/create' && method === 'POST') return handleRoomCreate(request, env);
+    if (path === '/api/rooms/poll' && method === 'GET') return handleRoomPoll(url, request, env);
+    if (path === '/api/rooms/join' && method === 'POST') return handleRoomJoin(request, env);
+    if (path === '/api/rooms/role' && method === 'POST') return handleRoomRole(request, env);
+    if (path === '/api/rooms/leave' && method === 'POST') return handleRoomLeave(request, env);
+    if (path === '/api/rooms/signal' && method === 'POST') return handleRoomSignal(request, env);
+    if (path === '/api/rooms/msg' && method === 'POST') return handleRoomMsg(request, env);
     if (path === '/api/admin/login' && method === 'POST') return handleAdminLogin(request, env);
     if (path === '/api/admin/players' && method === 'GET') return handleAdminPlayers(url, request, env);
+    if (path === '/api/admin/migrate' && method === 'POST') return handleAdminMigrate(request, env);
 
     const friendDel = /^\/api\/friends\/([^/]+)$/.exec(path);
     if (friendDel && method === 'DELETE') return handleFriendRemove(decodeURIComponent(friendDel[1]), request, env);

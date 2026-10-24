@@ -544,4 +544,25 @@
 .chat-input-bar input { flex:1; min-width:0; padding:9px 12px; border-radius:10px; border:2px solid var(--border); background:#0f1020; color:#fff; font-size:13px; outline:none; }
 .chat-input-bar input:focus { border-color:var(--gold); }
 .chat-input-bar button { padding:8px 16px; border-radius:10px; border:none; background:linear-gradient(135deg,#c9a24a,#f0c060); color:#1a1a28; font-weight:800; font-size:13px; cursor:pointer; flex-shrink:0; }
+/* 联机房间 */
+.room-box { width:94%; max-width:400px; height:min(68vh,600px); display:flex; flex-direction:column; padding:10px 12px; }
+.room-head { display:flex; align-items:center; justify-content:space-between; flex-shrink:0; }
+.room-code-label { color:#8a93b8; font-size:11px; margin-right:6px; }
+.room-code { color:var(--gold); font-weight:900; font-size:22px; letter-spacing:3px; font-family:ui-monospace,monospace; }
+.room-status { color:#ccd; font-size:12px; text-align:center; margin:6px 0 8px; flex-shrink:0; }
+.room-players { display:flex; align-items:center; gap:8px; flex-shrink:0; }
+.room-player { flex:1; min-width:0; background:rgba(255,255,255,0.06); border:1px solid var(--border); border-radius:12px; padding:8px 6px; display:flex; flex-direction:column; align-items:center; gap:4px; }
+.room-player.me { border-color:var(--gold); box-shadow:0 0 12px rgba(240,192,96,0.25); }
+.room-avatar { width:44px; height:44px; border-radius:50%; overflow:hidden; background:linear-gradient(135deg,#3a6db5,#7d5a9e); display:flex; align-items:center; justify-content:center; font-size:20px; flex-shrink:0; }
+.room-avatar img { width:100%; height:100%; object-fit:cover; display:block; }
+.room-name { color:#fff; font-size:12px; font-weight:700; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.room-role { color:#8a93b8; font-size:10px; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.room-role.picked { color:var(--gold); }
+.room-vs { color:var(--gold); font-weight:900; font-size:14px; flex-shrink:0; }
+.room-pick-title { color:#aab; font-size:11px; margin:10px 0 6px; flex-shrink:0; text-align:left; }
+.room-role-grid { flex:1; overflow-y:auto; display:flex; flex-wrap:wrap; gap:8px; align-content:flex-start; justify-content:center; }
+.room-role-grid .card-display { transform:scale(0.92); transform-origin:top center; }
+.room-role-grid .card-display.selected { outline:2px solid var(--gold); outline-offset:2px; }
+.room-role-grid.locked { pointer-events:none; opacity:0.55; }
+.net-badge { position:fixed; top:8px; left:50%; transform:translateX(-50%); z-index:60; background:rgba(10,12,24,0.88); border:1px solid rgba(255,255,255,0.2); color:#dfe; font-size:10px; padding:3px 10px; border-radius:20px; pointer-events:none; }
 

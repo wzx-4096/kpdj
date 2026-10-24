@@ -240,7 +240,7 @@
 
         // ============ 界面导航 ============
         function showScreen(s){
-            ['screenMenu','screenMode','screenManualSelect','screenFreeSelect','screenDualDraw','screenVS','screenBattle','screenBRSelect','screenTri','screenVictory','screenSettings','screenDev','screenDevStory','screenLight','screenAbout','screenJoySettings','screenStory','screenStoryTest','screenStoryScene','screenDuelInvite','screenDuelIntro','screenStoryResult','screenSupport','screenAccount','screenAccSettings','screenFriends','screenChat'].forEach(id=>{
+            ['screenMenu','screenMode','screenManualSelect','screenFreeSelect','screenDualDraw','screenVS','screenBattle','screenBRSelect','screenTri','screenVictory','screenSettings','screenDev','screenDevStory','screenLight','screenAbout','screenJoySettings','screenStory','screenStoryTest','screenStoryScene','screenDuelInvite','screenDuelIntro','screenStoryResult','screenSupport','screenAccount','screenAccSettings','screenFriends','screenChat','screenRoom'].forEach(id=>{
                 const el=document.getElementById(id); if(el) el.classList.remove('active');
             });
             if(s) s.classList.add('active');
@@ -254,11 +254,11 @@
             else if(sid==='screenVictory'||sid==='screenStoryResult') tk=bgmWish||'victory';
             else if(sid==='screenStoryScene') tk='story';
             else if(sid==='screenStory') tk='map';
-            else if(sid==='screenFreeSelect'||sid==='screenManualSelect'||sid==='screenBRSelect'||sid==='screenDualDraw'||sid==='screenStoryTest'||sid==='screenMode'||sid==='screenTri') tk='select';
+            else if(sid==='screenFreeSelect'||sid==='screenManualSelect'||sid==='screenBRSelect'||sid==='screenDualDraw'||sid==='screenStoryTest'||sid==='screenMode'||sid==='screenTri'||sid==='screenRoom') tk='select';
             bgmWish=null;
             setBgm(tk);
         }
-        function goToMenu(){ stopBattle(); showScreen(document.getElementById('screenMenu')); }
+        function goToMenu(){ if(gameMode==='online') onlineExit(); stopBattle(); showScreen(document.getElementById('screenMenu')); }
         function goToModeSelect(){ stopBattle(); resetDrawState(); showScreen(document.getElementById('screenMode')); }
 
         // ============ 状态重置 ============
@@ -1062,7 +1062,7 @@
         function createEntity(role, owner, index, total, isSummoned=false){
             const margin=role.size+15;
             let x,y,vx,vy;
-            if(gameMode==='dual' && !isSummoned){
+            if((gameMode==='dual'||gameMode==='online') && !isSummoned){
                 if(owner==='player1'){ x=arenaSize/2; y=arenaSize-margin; vx=(Math.random()-0.5)*role.moveSpeed*2; vy=-role.moveSpeed*0.8; }
                 else { x=arenaSize/2; y=margin; vx=(Math.random()-0.5)*role.moveSpeed*2; vy=role.moveSpeed*0.8; }
             }else{
@@ -1093,7 +1093,7 @@
             canvas=document.getElementById('battleCanvas'); canvas.width=arenaSize; canvas.height=arenaSize; ctx=canvas.getContext('2d');
             entities=[];
             roleList.forEach((role,i)=>{
-                const owner = gameMode==='dual' ? (i===0?'player1':'player2') : ('p'+i);
+                const owner = (gameMode==='dual'||gameMode==='online') ? (i===0?'player1':'player2') : ('p'+i);
                 const ent = createEntity(role, owner, i, roleList.length);
                 if(role.hasSpawn) ent.spawnTimer = performance.now() + 1000;
                 entities.push(ent);
@@ -1111,8 +1111,17 @@
                 entities[2].x=S*0.50; entities[2].y=S*0.225;
                 battleObstacles=buildClassroomObstacles();
             }
-            isManualBattle=(gameMode==='manual'||gameMode==='storyduel'); manualEnt=null;
-            if(isManualBattle && entities[0]){
+            isManualBattle=(gameMode==='manual'||gameMode==='storyduel'||gameMode==='online'); manualEnt=null;
+            if(gameMode==='online'){
+                remoteEnt=null;
+                const mine=entities[onlineHost?0:1], foe=entities[onlineHost?1:0];
+                if(mine){
+                    manualEnt=mine; mine.isManual=true;
+                    mine.lastSkillTime=performance.now()-mine.role.skillInterval;
+                    mine.vx=0; mine.vy=0;
+                }
+                if(foe){ foe.isManual=true; foe.isRemote=true; foe.netMove={x:0,y:0}; remoteEnt=foe; }
+            }else if(isManualBattle && entities[0]){
                 manualEnt=entities[0]; manualEnt.isManual=true;
                 manualEnt.lastSkillTime=performance.now()-manualEnt.role.skillInterval;
                 manualEnt.vx=0; manualEnt.vy=0;
@@ -1130,7 +1139,7 @@
             updateHUD();
             showScreen(document.getElementById('screenBattle'));
             const resultEl=document.getElementById('battleResult'); if(resultEl) resultEl.textContent='';
-            const endBtn=document.getElementById('btnEndBattle'); if(endBtn) endBtn.style.display='inline-block';
+            const endBtn=document.getElementById('btnEndBattle'); if(endBtn) endBtn.style.display=(gameMode==='online'?'none':'inline-block');
             const rematchBtn=document.getElementById('btnRematch'); if(rematchBtn) rematchBtn.style.display='none';
             document.querySelectorAll('.damage-pop,.heal-pop,.dodge-pop,.frozen-fixed,.revive-pop,.phone-pop,.deathnote-fixed').forEach(e=>e.remove());
             animationId=requestAnimationFrame(gameLoop);
@@ -1356,7 +1365,10 @@
                         setTimeout(()=>{ if(el.parentNode) el.remove(); }, 300);
                         e.frozenLabelEl = null;
                     }
-                    if(e.isManual && !(e.role.id==='liukun' && e.charging)){ e.vx=joyMove.x*2.6; e.vy=joyMove.y*2.6; }
+                    if(e.isManual && !(e.role.id==='liukun' && e.charging)){
+                        const mv=(e.isRemote&&e.netMove)?e.netMove:joyMove;
+                        e.vx=mv.x*2.6; e.vy=mv.y*2.6;
+                    }
                     e.x+=e.vx; e.y+=e.vy; let b=false;
                     if(e.role.id==='liukun'){
                         if(e.charging && (e.charging.hp<=0 || !entities.includes(e.charging))) e.charging=null;
@@ -1734,7 +1746,7 @@
             bg.addColorStop(0,'#2a2a40'); bg.addColorStop(1,'#141420'); ctx.fillStyle=bg; ctx.fillRect(0,0,arenaSize,arenaSize);
             ctx.strokeStyle='rgba(255,255,255,0.04)'; for(let i=arenaSize/8;i<arenaSize;i+=arenaSize/8){ ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,arenaSize); ctx.stroke(); ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(arenaSize,i); ctx.stroke(); }
             ctx.strokeStyle='rgba(240,192,96,0.3)'; ctx.lineWidth=2.5; ctx.strokeRect(2,2,arenaSize-4,arenaSize-4);
-            if(gameMode==='dual'){ ctx.setLineDash([8,12]); ctx.strokeStyle='rgba(255,255,255,0.15)'; ctx.beginPath(); ctx.moveTo(0,arenaSize/2); ctx.lineTo(arenaSize,arenaSize/2); ctx.stroke(); ctx.setLineDash([]); }
+            if(gameMode==='dual'||gameMode==='online'){ ctx.setLineDash([8,12]); ctx.strokeStyle='rgba(255,255,255,0.15)'; ctx.beginPath(); ctx.moveTo(0,arenaSize/2); ctx.lineTo(arenaSize,arenaSize/2); ctx.stroke(); ctx.setLineDash([]); }
             }
             projectiles.forEach(p=>{
                 ctx.save();
@@ -1793,7 +1805,7 @@
                 const glow=ctx.createRadialGradient(e.x,e.y,e.size*0.3,e.x,e.y,e.size*0.85); glow.addColorStop(0,e.role.color+'50'); glow.addColorStop(1,'transparent'); ctx.fillStyle=glow; ctx.beginPath(); ctx.arc(e.x,e.y,e.size*0.85,0,Math.PI*2); ctx.fill();
                 ctx.fillStyle=e.role.color; ctx.beginPath(); ctx.arc(e.x,e.y,e.size/2,0,Math.PI*2); ctx.fill();
                 ctx.fillStyle='#fff'; ctx.font=`${e.size*0.55}px sans-serif`; ctx.textAlign='center'; ctx.fillText(e.role.avatar,e.x,e.y+1);
-                if(e.isManual && joySkill.active){
+                if(e.isManual && !e.isRemote && joySkill.active){
                     const sm=Math.hypot(joySkill.x,joySkill.y);
                     if(sm>0.15){
                         const ax=joySkill.x/sm, ay=joySkill.y/sm;
@@ -1814,7 +1826,7 @@
                         ctx.restore();
                     }
                 }
-                if(e.isManual&&IS_PC){ const rdy=performance.now()-e.lastSkillTime, iv=e.role.skillInterval||1; if(rdy<iv){ const frac=1-rdy/iv; ctx.strokeStyle='rgba(0,0,0,0.55)'; ctx.lineWidth=3; ctx.beginPath(); ctx.arc(e.x,e.y,e.size/2+5,-Math.PI/2,-Math.PI/2+Math.PI*2*frac); ctx.stroke(); } }
+                if(e.isManual&&!e.isRemote&&IS_PC){ const rdy=performance.now()-e.lastSkillTime, iv=e.role.skillInterval||1; if(rdy<iv){ const frac=1-rdy/iv; ctx.strokeStyle='rgba(0,0,0,0.55)'; ctx.lineWidth=3; ctx.beginPath(); ctx.arc(e.x,e.y,e.size/2+5,-Math.PI/2,-Math.PI/2+Math.PI*2*frac); ctx.stroke(); } }
                 const hpW=e.size*1.1; ctx.fillStyle='#333'; ctx.fillRect(e.x-hpW/2,e.y-e.size/2-8,hpW,4);
                 const hpP=Math.max(0,e.hp/e.maxHp); ctx.fillStyle=hpP>0.5?'#5cb85c':hpP>0.25?'#f0ad4e':'#e74c3c'; ctx.fillRect(e.x-hpW/2,e.y-e.size/2-8,hpW*hpP,4);
                 ctx.restore();
@@ -1838,8 +1850,10 @@
         // ============ 主循环 ============
         function gameLoop(ts){
             if(!battleActive) return;
+            if(netGuest){ guestTick(ts); return; }
             animationId=requestAnimationFrame(gameLoop);
             update(ts); render(); updateHUD();
+            if(gameMode==='online'&&onlineHost) onlineHostTick();
             const alive = entities.filter(e => e.hp > 0);
             const owners = new Set(alive.map(e => e.owner));
             if(gameMode==='storyduel'){
@@ -1872,15 +1886,16 @@
             if (alive.length === 0 || owners.size <= 1) {
                 battleActive = false; cancelAnimationFrame(animationId); animationId = null;
                 sfxWin();
+                if(gameMode==='online'&&!onlineEnded) onlineHostEnd(alive);
                 const endBtn = document.getElementById('btnEndBattle'); if(endBtn) endBtn.style.display='none';
-                const rematchBtn = document.getElementById('btnRematch'); if(rematchBtn) rematchBtn.style.display='inline-block';
+                const rematchBtn = document.getElementById('btnRematch'); if(rematchBtn) rematchBtn.style.display=(gameMode==='online'?'none':'inline-block');
                 const resultEl = document.getElementById('battleResult');
                 if (alive.length === 0) {
                     if(resultEl) resultEl.textContent = '💀 全部阵亡！';
                     showVictory('同归于尽 💀', '💀', '#888888');
                 } else {
                     const winner = alive.find(e => !e.isEmperor) || alive[0];
-                    const label = winner.isEmperor ? ('皇帝(' + (winner.summoner ? rn(winner.summoner.role) : '?') + ')') : (gameMode==='dual' ? (winner.owner==='player1'?'玩家1':'玩家2') : rn(winner.role));
+                    const label = winner.isEmperor ? ('皇帝(' + (winner.summoner ? rn(winner.summoner.role) : '?') + ')') : ((gameMode==='dual'||gameMode==='online') ? (winner.owner==='player1'?'玩家1':'玩家2') : rn(winner.role));
                     if(resultEl) resultEl.textContent = `🏆 ${label} 获胜！`;
                     showVictory(label+' 获胜！', winner.role.avatar, winner.role.color);
                 }
@@ -1895,6 +1910,7 @@
             if(n) n.textContent=text;
             if(c){ c.innerHTML=''; const colors=['#f0c060','#ff6b8a','#66ccff','#90ee90','#c8a0ff']; for(let i=0;i<16;i++){ const s=document.createElement('span'); s.className='confetti'; s.style.left=(Math.random()*100)+'%'; s.style.background=colors[i%colors.length]; s.style.animationDelay=(Math.random()*0.8)+'s'; s.style.animationDuration=(1.6+Math.random()*1.4)+'s'; c.appendChild(s); } }
             bgmWish=/阵亡|同归于尽/.test(text)?'lose':'victory';
+            const rb=document.getElementById('btnVictoryRematch'); if(rb) rb.style.display=(gameMode==='online'?'none':'');
             showScreen(document.getElementById('screenVictory'));
         }
 
@@ -1909,16 +1925,20 @@
             document.querySelectorAll('.damage-pop,.heal-pop,.dodge-pop,.frozen-fixed,.revive-pop,.phone-pop,.deathnote-fixed').forEach(e=>e.remove());
             const jmw0=document.getElementById('joyMoveWrap'), jsw0=document.getElementById('joySkillWrap'), kh0=document.getElementById('kbHint');
             if(jmw0) jmw0.style.display='none'; if(jsw0) jsw0.style.display='none'; if(kh0) kh0.style.display='none';
-            isManualBattle=false; manualEnt=null; resetJoysticks();
+            isManualBattle=false; manualEnt=null; remoteEnt=null; resetJoysticks();
             mouseAim.on=false; mouseAim.x=1; mouseAim.y=0;
         }
-        function endBattle(){ stopBattle(); if(gameMode==='storyduel'){ showScreen(document.getElementById('screenStory')); requestAnimationFrame(()=>requestAnimationFrame(buildStoryMap)); } else goToModeSelect(); }
+        function endBattle(){
+            if(gameMode==='online'){ gameMode='online'; onlineExit(); stopBattle(); gameMode=null; friendsOpen(); return; }
+            stopBattle(); if(gameMode==='storyduel'){ showScreen(document.getElementById('screenStory')); requestAnimationFrame(()=>requestAnimationFrame(buildStoryMap)); } else goToModeSelect();
+        }
         function rematch(){
             if(gameMode==='free'){ const tmp=player1Role; player1Role=player2Role; player2Role=tmp; if(player1Role&&player2Role) initBattle([player1Role,player2Role]); }
             else if(gameMode==='dual'){ resetDrawState(); showScreen(document.getElementById('screenDualDraw')); stopBattle(); }
             else if(gameMode==='br'){ goToModeSelect(); }
             else if(gameMode==='tri'){ if(triPicked.length>=2) initBattle([...triPicked]); }
             else if(gameMode==='manual'){ if(manualMyRole&&manualEnemyRole) initBattle([manualMyRole,manualEnemyRole]); }
+            else if(gameMode==='online'){ onlineExit(); stopBattle(); friendsOpen(); }
             else if(gameMode==='storyduel'){ startStoryLevelBattle(curStoryLevel); }
         }
 
@@ -2037,6 +2057,12 @@
             const ts=performance.now();
             if(ts<manualEnt.frozenUntil || ts-manualEnt.lastSkillTime<manualEnt.role.skillInterval) return;
             manualEnt.lastSkillTime=ts;
+            if(netGuest){
+                const ang=Math.atan2(fy,fx);
+                netSend({t:'i',m:[joyMove.x,joyMove.y],s:ang,q:++netState.seq});
+                try{ sfxShoot(); }catch(e){}
+                return;
+            }
             fireSkill(manualEnt, Math.atan2(fy,fx));
         }
         function resetJoysticks(){
@@ -2436,7 +2462,16 @@
                     catch(e){ alert(e.message); b.disabled=false; }
                 });
                 const chat=frBtn('聊天','primary',()=>chatOpen(f.pid,displayName(f)));
-                const row=frRow(f,'@'+f.username+(f.unread?' · '+f.unread+' 条未读':''),[chat,del]);
+                const acts=[];
+                if(f.room&&f.room.id){
+                    acts.push(frBtn('🚪 加入','primary',async b=>{
+                        b.disabled=true;
+                        try{ await roomJoin(f.room.id); }
+                        catch(e){ alert(e.message); b.disabled=false; }
+                    }));
+                }
+                acts.push(chat,del);
+                const row=frRow(f,'@'+f.username+(f.room&&f.room.id?' · 🎮 房间 '+f.room.id:'')+(f.unread?' · '+f.unread+' 条未读':''),acts);
                 row.style.cursor='pointer';
                 row.addEventListener('click',()=>chatOpen(f.pid,displayName(f)));
                 list.appendChild(row);
@@ -2551,6 +2586,488 @@
             catch(e){ chatError(e.message); }
             finally{ if(btn) btn.disabled=false; }
         }
+
+        // ============ 联机房间（WebRTC 点对点直连 + D1 轮询中继自动降级） ============
+        let onlineRoom=null, onlineRoomId='', onlineStarted=false, onlineEnded=false, onlineHost=false;
+        let netGuest=false, remoteEnt=null, netPendingOffer='', netPendingAnswer='';
+        let onlinePollTimer=null, onlinePollAfter=0, onlinePollMs=800, onlinePolling=false, onlineClosing=false;
+        let netPc=null, netDc=null, netMode='', netFallbackTimer=null;
+        let netState={seq:0,lastStateAt:0,lastInputAt:0,lastRecvAt:0,lastDamageAt:0};
+
+        function roleById(id){
+            if(!id) return null;
+            for(const r of ROLES){
+                if(r.id===id) return r;
+                for(const s of (r.spawnRoles||[])) if(s.id===id) return s;
+            }
+            if(EMPEROR_ROLE.id===id) return EMPEROR_ROLE;
+            for(const r of PARENT_ROLES) if(r.id===id) return r;
+            if(FUQIN_ROLE.id===id) return FUQIN_ROLE;
+            return null;
+        }
+        function onlineScreenActive(){ const el=document.getElementById('screenRoom'); return !!(el&&el.classList.contains('active')); }
+        function onlineBadge(text){
+            const el=document.getElementById('netBadge'); if(!el) return;
+            if(!text){ el.style.display='none'; el.textContent=''; return; }
+            el.textContent=text; el.style.display='';
+        }
+        function onlineResetLocal(){
+            onlineStarted=false; onlineEnded=false; onlineHost=false; netGuest=false; remoteEnt=null;
+            netPendingOffer=''; netPendingAnswer='';
+            netState={seq:0,lastStateAt:0,lastInputAt:0,lastRecvAt:0,lastDamageAt:0};
+        }
+
+        // ---------- 网络通道 ----------
+        function netClose(){
+            if(netFallbackTimer){ clearTimeout(netFallbackTimer); netFallbackTimer=null; }
+            try{ if(netDc) netDc.close(); }catch(e){}
+            try{ if(netPc) netPc.close(); }catch(e){}
+            netDc=null; netPc=null; netMode=''; onlineBadge('');
+        }
+        function netSupported(){ return typeof RTCPeerConnection!=='undefined'; }
+        function netWaitIce(pc){
+            return new Promise(res=>{
+                if(pc.iceGatheringState==='complete') return res();
+                let done=false;
+                const fin=()=>{ if(done) return; done=true; clearTimeout(t); pc.removeEventListener('icegatheringstatechange',on); res(); };
+                const on=()=>{ if(pc.iceGatheringState==='complete') fin(); };
+                const t=setTimeout(fin,2500);
+                pc.addEventListener('icegatheringstatechange',on);
+            });
+        }
+        function netSetupDc(dc){
+            netDc=dc;
+            dc.onopen=()=>{
+                netMode='p2p';
+                onlineBadge('🌐 直连');
+                if(netFallbackTimer){ clearTimeout(netFallbackTimer); netFallbackTimer=null; }
+                onlinePollSet(2000);
+            };
+            dc.onmessage=ev=>{ try{ handleNetGame(JSON.parse(ev.data)); }catch(e){} };
+            dc.onclose=()=>{ if(netMode==='p2p'){ netMode='relay'; onlineBadge('📡 中继'); onlinePollSet(160); } };
+        }
+        const NET_ICE={ iceServers:[{urls:['stun:stun.l.google.com:19302','stun:stun1.l.google.com:19302','stun:stun.miwifi.com:3478']}] };
+        async function netConnect(){
+            netClose();
+            onlineBadge('🔗 连接中…');
+            onlinePollStart(160);            // 先走中继，保证一定能打
+            if(!netSupported()){ netMode='relay'; onlineBadge('📡 中继'); return; }
+            netMode='relay';
+            netFallbackTimer=setTimeout(()=>{
+                netFallbackTimer=null;
+                if(netMode==='p2p') return;
+                try{ if(netPc) netPc.close(); }catch(e){}
+                netPc=null; netDc=null; netMode='relay';
+                onlineBadge('📡 中继（自动）');
+                onlinePollSet(160);
+            },8000);
+            if(!onlineHost) return;          // 客机等房主的 offer
+            try{
+                const pc=new RTCPeerConnection(NET_ICE); netPc=pc;
+                netSetupDc(pc.createDataChannel('kpdj'));
+                pc.oniceconnectionstatechange=()=>{};
+                const offer=await pc.createOffer();
+                await pc.setLocalDescription(offer);
+                await netWaitIce(pc);
+                if(netPc!==pc) return;
+                await authApi('/rooms/signal',{method:'POST',body:{kind:'offer',payload:JSON.stringify(pc.localDescription)}});
+            }catch(e){ if(netMode!=='p2p'){ netMode='relay'; onlineBadge('📡 中继'); } }
+        }
+        async function netOnOffer(payload){
+            if(!onlineStarted||onlineHost||netPc) return;
+            try{
+                const pc=new RTCPeerConnection(NET_ICE); netPc=pc;
+                pc.ondatachannel=ev=>netSetupDc(ev.channel);
+                await pc.setRemoteDescription(JSON.parse(payload));
+                const answer=await pc.createAnswer();
+                await pc.setLocalDescription(answer);
+                await netWaitIce(pc);
+                if(netPc!==pc) return;
+                await authApi('/rooms/signal',{method:'POST',body:{kind:'answer',payload:JSON.stringify(pc.localDescription)}});
+            }catch(e){}
+        }
+        async function netOnAnswer(payload){
+            if(!onlineHost||!netPc) return;
+            try{ await netPc.setRemoteDescription(JSON.parse(payload)); }catch(e){}
+        }
+        function netSend(obj){
+            if(!onlineRoomId||!authToken) return;
+            let s; try{ s=JSON.stringify(obj); }catch(e){ return; }
+            if(netDc&&netDc.readyState==='open'){ try{ netDc.send(s); return; }catch(e){} }
+            const kind=obj.t==='s'?'state':(obj.t==='i'?'input':(obj.t==='e'?'end':'ping'));
+            authApi('/rooms/msg',{method:'POST',body:{kind,payload:s}}).catch(()=>{});
+        }
+        function handleNetGame(m){
+            if(!m||!onlineStarted) return;
+            if(m.t==='s'){ if(!onlineHost) netApplyStateObject(m); }
+            else if(m.t==='i'){ if(onlineHost) applyGuestInputObject(m); }
+            else if(m.t==='e'){ if(!onlineHost) guestFinish(m.w||''); }
+        }
+        function handleRoomMessage(kind,payload){
+            if(kind==='offer'){ if(onlineHost) return; if(!onlineStarted){ netPendingOffer=payload; return; } netOnOffer(payload); return; }
+            if(kind==='answer'){ if(!onlineHost) return; if(!onlineStarted){ netPendingAnswer=payload; return; } netOnAnswer(payload); return; }
+            if(!onlineStarted||!payload) return;
+            try{
+                if(kind==='input'){ if(onlineHost) applyGuestInputObject(JSON.parse(payload)); }
+                else if(kind==='state'){ if(!onlineHost) netApplyStateObject(JSON.parse(payload)); }
+                else if(kind==='end'){ if(!onlineHost) guestFinish((JSON.parse(payload)||{}).w||''); }
+            }catch(e){}
+        }
+        function applyGuestInputObject(d){
+            if(!d||!onlineHost||!battleActive||!remoteEnt||remoteEnt.hp<=0) return;
+            netState.lastInputAt=performance.now();
+            const m=d.m||[0,0];
+            remoteEnt.netMove={x:Number(m[0])||0,y:Number(m[1])||0};
+            if(typeof d.s==='number'&&!isNaN(d.s)){
+                const now=performance.now();
+                if(now>=remoteEnt.frozenUntil && now-remoteEnt.lastSkillTime>=remoteEnt.role.skillInterval){
+                    remoteEnt.lastSkillTime=now;
+                    fireSkill(remoteEnt,d.s);
+                }
+            }
+        }
+
+        // ---------- 房主权威快照 ----------
+        function serializeNetState(){
+            const now=performance.now();
+            return {
+                e:entities.map(e=>({
+                    u:e.uid,r:e.role.id,o:e.owner,
+                    x:Math.round(e.x*10)/10,y:Math.round(e.y*10)/10,
+                    h:Math.max(0,Math.round(e.hp*10)/10),m:e.maxHp,
+                    c:e.charging?e.charging.uid:0,
+                    f:e.flashTimer>0?1:0,
+                    z:Math.max(0,Math.round(e.frozenUntil-now)),
+                    v:Math.max(0,Math.round(e.invincibleUntil-now))
+                })),
+                p:projectiles.map(p=>({x:Math.round(p.x),y:Math.round(p.y),t:p.type,s:p.size,c:p.color,e:p.emoji||''}))
+            };
+        }
+        function netMakeEnt(role,owner){
+            return {role,owner,x:arenaSize/2,y:arenaSize/2,vx:0,vy:0,hp:role.hp,maxHp:role.hp,size:role.size,
+                lastSkillTime:0,flashTimer:0,frozenUntil:0,lastFrozenTick:0,isEmperor:role.id==='emperor',summoner:null,
+                frozenLabelEl:null,isParent:false,mother:null,parentAtkUntil:0,liukunAtkUntil:0,chargeTimer:0,charging:null,
+                lastSecondTime:0,revived:false,invincibleUntil:0,spawnTimer:0,uid:++uidCounter,hudFillEl:null,hudTextEl:null,
+                isManual:false,isRemote:true,netMove:{x:0,y:0},netTX:null,netTY:null,_hu:0};
+        }
+        function netApplyStateObject(d){
+            if(!d||!d.e||!netGuest||!battleActive) return;
+            const now=performance.now();
+            netState.lastRecvAt=now;
+            const old=entities, used=new Set(), next=[];
+            d.e.forEach(sd=>{
+                const role=roleById(sd.r);
+                if(!role) return;
+                let e=null;
+                for(const o of old){ if(used.has(o)) continue; if(o.uid===sd.u&&o.role.id===sd.r&&o.owner===sd.o){ e=o; break; } }
+                if(!e){ for(const o of old){ if(used.has(o)) continue; if(o.owner===sd.o&&o.role.id===sd.r){ e=o; break; } } }
+                if(!e) e=netMakeEnt(role,sd.o);
+                used.add(e);
+                const prevHp=e.hp;
+                e._hu=sd.u;
+                e.netTX=sd.x; e.netTY=sd.y;
+                if(e!==manualEnt&&(Math.abs(e.x-sd.x)>70||Math.abs(e.y-sd.y)>70)){ e.x=sd.x; e.y=sd.y; }
+                e.hp=sd.h; e.maxHp=sd.m;
+                e.flashTimer=sd.f?120:0;
+                e.frozenUntil=sd.z>0?now+sd.z:0;
+                e.invincibleUntil=sd.v>0?now+sd.v:0;
+                e._cu=sd.c||0;
+                if(e.hp<prevHp-0.5&&e.hp>=0){
+                    const dmg=Math.round(prevHp-e.hp);
+                    if(dmg>0){ spawnDamagePop(e.x,e.y,dmg); spawnParticles(e.x,e.y,'#ff5555',Math.min(12,4+dmg)); }
+                    if(now-netState.lastDamageAt>180){ netState.lastDamageAt=now; sfxHit(); }
+                }
+                next.push(e);
+            });
+            if(!next.length) return;
+            next.forEach(e=>{
+                if(e._cu){ const t=next.find(x=>x._hu===e._cu); e.charging=t&&t!==e?t:null; }
+                else e.charging=null;
+            });
+            entities=next;
+            projectiles=(d.p||[]).map(pd=>({x:pd.x,y:pd.y,vx:0,vy:0,type:pd.t,size:pd.s,color:pd.c,emoji:pd.e||'🚗',born:now}));
+        }
+        function onlineHostTick(){
+            if(!onlineStarted||!onlineHost||onlineEnded||!battleActive) return;
+            const now=performance.now();
+            if(!netState.lastInputAt) netState.lastInputAt=now;
+            if(now-netState.lastInputAt>15000){ onlineEnded=true; onlineAbort('对方已断开连接'); return; }
+            if(remoteEnt&&remoteEnt.hp>0&&now-netState.lastInputAt>600){ remoteEnt.netMove={x:0,y:0}; }
+            const iv=netMode==='p2p'?60:150;
+            if(now-netState.lastStateAt<iv) return;
+            netState.lastStateAt=now;
+            netSend({t:'s',d:serializeNetState()});
+        }
+        function onlineHostEnd(alive){
+            if(onlineEnded) return;
+            onlineEnded=true;
+            const winner=alive.length?(alive.find(e=>!e.isEmperor)||alive[0]):null;
+            const w=winner?(winner.owner==='player1'?'player1':'player2'):'';
+            netSend({t:'e',w:w});
+            setTimeout(()=>{ if(onlineEnded) netSend({t:'e',w:w}); },350);
+            onlineBadge('已结束');
+            onlinePollStop();
+        }
+
+        // ---------- 客机：本地预测 + 快照插值 ----------
+        function guestTick(ts){
+            if(!battleActive) return;
+            animationId=requestAnimationFrame(gameLoop);
+            const now=performance.now();
+            if(manualEnt&&manualEnt.hp>0&&!(manualEnt.role.id==='liukun'&&manualEnt.charging)){
+                manualEnt.vx=joyMove.x*2.6; manualEnt.vy=joyMove.y*2.6;
+                manualEnt.x+=manualEnt.vx; manualEnt.y+=manualEnt.vy;
+                const m=15, half=manualEnt.size/2;
+                if(manualEnt.x-half<m) manualEnt.x=m+half;
+                if(manualEnt.x+half>arenaSize-m) manualEnt.x=arenaSize-m-half;
+                if(manualEnt.y-half<m) manualEnt.y=m+half;
+                if(manualEnt.y+half>arenaSize-m) manualEnt.y=arenaSize-m-half;
+                if(manualEnt.netTX!=null){
+                    const dx=manualEnt.netTX-manualEnt.x, dy=manualEnt.netTY-manualEnt.y;
+                    if(Math.hypot(dx,dy)>70){ manualEnt.x=manualEnt.netTX; manualEnt.y=manualEnt.netTY; }
+                    else{ manualEnt.x+=dx*0.18; manualEnt.y+=dy*0.18; }
+                }
+            }
+            entities.forEach(e=>{
+                if(e===manualEnt||e.netTX==null) return;
+                e.x+=(e.netTX-e.x)*0.4; e.y+=(e.netTY-e.y)*0.4;
+            });
+            for(let i=particles.length-1;i>=0;i--){ particles[i].x+=particles[i].vx; particles[i].y+=particles[i].vy; particles[i].life-=16; if(particles[i].life<=0) particles.splice(i,1); }
+            if(now-netState.lastInputAt>=110){
+                netState.lastInputAt=now;
+                netSend({t:'i',m:[joyMove.x,joyMove.y],q:++netState.seq});
+            }
+            if(manualEnt) updateSkillCooldown(ts);
+            if(!onlineEnded&&netState.lastRecvAt&&now-netState.lastRecvAt>15000){
+                onlineEnded=true; onlineAbort('与房主的连接已断开'); return;
+            }
+            render(); updateHUD();
+            if(!onlineEnded&&manualEnt&&manualEnt.hp<=0&&now-netState.lastRecvAt>1500) guestFinish('');
+        }
+        function guestFinish(winner){
+            if(onlineEnded) return;
+            onlineEnded=true;
+            if(!battleActive) return;
+            battleActive=false; if(animationId) cancelAnimationFrame(animationId); animationId=null;
+            const mine=manualEnt, foe=remoteEnt;
+            render(); updateHUD();
+            const endBtn=document.getElementById('btnEndBattle'); if(endBtn) endBtn.style.display='none';
+            const rematchBtn=document.getElementById('btnRematch'); if(rematchBtn) rematchBtn.style.display='none';
+            const resultEl=document.getElementById('battleResult');
+            sfxWin();
+            if(winner===''){
+                if(resultEl) resultEl.textContent='💀 同归于尽！';
+                showVictory('同归于尽 💀','💀','#888888');
+            }else if(winner==='player2'){
+                if(resultEl) resultEl.textContent='🏆 你获胜！';
+                showVictory('🏆 你获胜！',mine?mine.role.avatar:'🏆',mine?mine.role.color:'#f0c060');
+            }else{
+                if(resultEl) resultEl.textContent='💀 你失败了';
+                showVictory('💀 你失败了',foe?foe.role.avatar:'💀',foe?foe.role.color:'#888888');
+            }
+            onlineBadge('已结束');
+            onlinePollStop();
+        }
+        // ---------- 房间页 ----------
+        function roomFillPlayer(p,avId,nameId,roleId){
+            const av=document.getElementById(avId), nm=document.getElementById(nameId), rl=document.getElementById(roleId);
+            if(av){
+                av.innerHTML='';
+                if(p&&p.avatar){ const im=document.createElement('img'); im.src=p.avatar; im.alt=''; av.appendChild(im); }
+                else av.textContent=p?String(p.nickname||p.username||'?').slice(0,1):'👤';
+            }
+            if(nm) nm.textContent=p?(p.nickname||p.username||'玩家'):'等待加入';
+            if(rl){
+                if(!p){ rl.textContent='--'; rl.classList.remove('picked'); }
+                else if(p.role){ const r=roleById(p.role); rl.textContent=r?('✅ '+rn(r)):'✅ 已选'; rl.classList.add('picked'); }
+                else { rl.textContent=p.picked?'✅ 已选':'未选'; rl.classList.toggle('picked',!!p.picked); }
+            }
+        }
+        function renderRoom(room){
+            if(!room) return;
+            const codeEl=document.getElementById('roomCode'); if(codeEl) codeEl.textContent=room.id||'------';
+            const st=document.getElementById('roomStatus');
+            if(st){
+                if(room.status==='waiting') st.textContent='⏳ 等待好友加入…把房间码发给好友，或让好友在好友列表点「加入」';
+                else if(room.status==='picking') st.textContent='🃏 双方选角中，双方都选好后自动开战';
+                else if(room.status==='battle') st.textContent='⚔️ 双方已选角，正在进入对战…';
+                else st.textContent='房间已结束';
+            }
+            roomFillPlayer(room.host,'roomHostAvatar','roomHostName','roomHostRole');
+            roomFillPlayer(room.guest,'roomGuestAvatar','roomGuestName','roomGuestRole');
+            const list=document.getElementById('roomRoleList');
+            if(list){
+                if(!list.dataset.built){ list.dataset.built='1'; buildRoleCards(list,(card,role)=>roomPickRole(role)); }
+                const me=room[room.you]||{};
+                list.classList.toggle('locked',!!onlineStarted||room.status==='battle');
+                list.querySelectorAll('.card-display').forEach(c=>c.classList.toggle('selected',!!me.role&&c.dataset.roleId===me.role));
+            }
+        }
+        async function roomPickRole(role){
+            if(!role||onlineStarted||!onlineRoom||onlineRoom.status==='battle') return;
+            try{
+                const d=await authApi('/rooms/role',{method:'POST',body:{roleId:role.id}});
+                if(!d.room) return;
+                onlineRoom=d.room; sfxClick(); renderRoom(d.room);
+                if(d.room.status==='battle') startOnlineMatch(d.room);
+            }catch(e){ alert(e.message); }
+        }
+        function roomEnter(room){
+            onlineRoom=room; onlineRoomId=room.id; onlineClosing=false;
+            onlineResetLocal();
+            onlinePollAfter=0;
+            renderRoom(room);
+            showScreen(document.getElementById('screenRoom'));
+            onlinePollStart(800);
+        }
+        async function roomCreate(){
+            if(!authUser){ authErr('请先登录后使用联机房间'); showScreen(document.getElementById('screenAccount')); return; }
+            try{
+                const d=await authApi('/rooms/create',{method:'POST'});
+                if(!d.room){ alert('创建房间失败'); return; }
+                onlinePollStop(); netClose();
+                onlineRoom=null; onlineRoomId=''; onlinePollAfter=0; onlineResetLocal();
+                roomEnter(d.room); sfxClick();
+            }catch(e){ alert(e.message); }
+        }
+        async function roomJoin(id){
+            if(!authUser){ authErr('请先登录后使用联机房间'); showScreen(document.getElementById('screenAccount')); return; }
+            try{
+                const d=await authApi('/rooms/join',{method:'POST',body:{id:id}});
+                if(!d.room){ alert('加入房间失败'); return; }
+                onlinePollStop(); netClose();
+                onlineRoom=null; onlineRoomId=''; onlinePollAfter=0; onlineResetLocal();
+                roomEnter(d.room); sfxClick();
+            }catch(e){ alert(e.message); }
+        }
+        async function roomsResume(){
+            if(!authUser){ authErr('请先登录后使用联机房间'); showScreen(document.getElementById('screenAccount')); return; }
+            try{
+                const d=await authApi('/rooms/poll?after=0');
+                if(d.room&&d.room.status!=='battle'){
+                    roomEnter(d.room);
+                    return;
+                }
+                if(d.room&&d.room.status==='battle'){
+                    await authApi('/rooms/leave',{method:'POST'});
+                    alert('上一场对战已中断，已退出房间');
+                }
+            }catch(e){}
+            friendsOpen();
+        }
+        function roomLeave(){
+            if(onlineClosing) return;
+            onlineClosing=true;
+            onlineExit();
+            friendsOpen();
+            setTimeout(()=>{ onlineClosing=false; },600);
+        }
+        function roomCopy(){
+            if(!onlineRoomId) return;
+            const done=()=>{ sfxClick(); const b=document.getElementById('btnRoomCopy'); if(b){ b.textContent='✅ 已复制'; setTimeout(()=>{ b.textContent='📋 复制'; },1400); } };
+            try{
+                if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(onlineRoomId).then(done,done);
+                else { prompt('房间码：',onlineRoomId); }
+            }catch(e){ prompt('房间码：',onlineRoomId); }
+        }
+
+        // ---------- 轮询（房间状态 + 中继消息） ----------
+        function onlinePollStart(ms){
+            onlinePollMs=ms||800;
+            if(onlinePollTimer) clearInterval(onlinePollTimer);
+            onlinePollTimer=setInterval(()=>{ onlinePollOnce(); },onlinePollMs);
+            onlinePollOnce();
+        }
+        function onlinePollStop(){ if(onlinePollTimer){ clearInterval(onlinePollTimer); onlinePollTimer=null; } }
+        function onlinePollSet(ms){ if(!onlinePollTimer||onlinePollMs===ms) return; onlinePollStart(ms); }
+        async function onlinePollOnce(){
+            if(!authUser||onlinePolling) return;
+            if(!onlineRoomId&&!onlineScreenActive()) return;
+            onlinePolling=true;
+            try{
+                const d=await authApi('/rooms/poll?after='+onlinePollAfter);
+                if(!onlineRoomId) return;
+                if(!d.room){
+                    if(onlineStarted&&!battleActive){ onlinePollStop(); return; }
+                    roomLost();
+                    return;
+                }
+                onlineRoom=d.room; onlineRoomId=d.room.id;
+                let lastState=null;
+                (d.msgs||[]).forEach(m=>{
+                    if(m.id>onlinePollAfter) onlinePollAfter=m.id;
+                    if(m.from_pid===authUser.pid) return;
+                    if(m.kind==='state'){ lastState=m.payload; return; }
+                    handleRoomMessage(m.kind,m.payload);
+                });
+                if(lastState&&netGuest&&battleActive){ try{ netApplyStateObject(JSON.parse(lastState)); }catch(e){} }
+                if(onlineStarted){
+                    if(d.room.status!=='battle'&&!onlineEnded) opponentLeft();
+                }else if(d.room.status==='battle'){
+                    startOnlineMatch(d.room);
+                }else if(onlineScreenActive()){
+                    renderRoom(d.room);
+                }
+            }catch(e){
+                if(!onlineStarted&&onlineRoomId){ const el=document.getElementById('roomStatus'); if(el) el.textContent='网络不稳定，正在重试…'; }
+            }finally{ onlinePolling=false; }
+        }
+
+        // ---------- 开局 / 结束 / 退出 ----------
+        function startOnlineMatch(room){
+            if(onlineStarted||!room) return;
+            const hr=roleById(room.host&&room.host.role), gr=roleById(room.guest&&room.guest.role);
+            if(!hr||!gr) return;
+            onlineStarted=true; onlineEnded=false; onlineClosing=false;
+            onlineHost=(room.you==='host'); netGuest=!onlineHost;
+            onlineRoom=room; onlineRoomId=room.id;
+            gameMode='online';
+            showVSIntro([hr,gr],()=>{
+                initBattle([hr,gr]);
+                netState.lastRecvAt=performance.now();
+                netState.lastInputAt=performance.now();
+                netState.lastStateAt=0; netState.seq=0;
+                onlineBadge(onlineHost?'🔗 连接中…':'🔗 连接中…');
+            });
+            netConnect();
+            if(netPendingOffer&&netGuest){ const p=netPendingOffer; netPendingOffer=''; netOnOffer(p); }
+            if(netPendingAnswer&&onlineHost){ const p=netPendingAnswer; netPendingAnswer=''; netOnAnswer(p); }
+        }
+        function onlineExit(){
+            const had=!!onlineRoomId;
+            onlinePollStop();
+            netClose();
+            onlineRoom=null; onlineRoomId='';
+            onlineResetLocal();
+            if(had) authApi('/rooms/leave',{method:'POST'}).catch(()=>{});
+        }
+        function onlineAbort(msg){
+            if(onlineClosing) return;
+            onlineClosing=true;
+            onlineExit();
+            stopBattle();
+            gameMode=null;
+            setTimeout(()=>{ onlineClosing=false; },1000);
+            if(msg) alert(msg);
+            friendsOpen();
+        }
+        function roomLost(){ if(!onlineClosing) onlineAbort('房间已解散或你已不在房间中'); }
+        function opponentLeft(){ if(!onlineEnded&&!onlineClosing){ onlineEnded=true; onlineAbort('对方已离开房间'); } }
+
+        document.getElementById('btnOnline').addEventListener('click',()=>{ sfxClick(); roomsResume(); });
+        document.getElementById('btnRoomCreate').addEventListener('click',()=>{ sfxClick(); roomCreate(); });
+        document.getElementById('btnRoomLeave').addEventListener('click',()=>{ sfxClick(); roomLeave(); });
+        document.getElementById('btnRoomCopy').addEventListener('click',roomCopy);
+        setInterval(()=>{
+            if(!authUser||onlineStarted) return;
+            if(!document.getElementById('screenFriends').classList.contains('active')) return;
+            if(friendsTab!=='list') return;
+            friendsLoad().catch(()=>{});
+        },5000);
+        window.addEventListener('beforeunload',()=>{
+            if(!onlineRoomId||!authToken) return;
+            try{ fetch('/api/rooms/leave',{method:'POST',headers:{authorization:'Bearer '+authToken},keepalive:true}); }catch(e){}
+        });
 
         document.getElementById('btnAccount').addEventListener('click',()=>{ sfxClick(); authErr(''); authRender(); showScreen(document.getElementById('screenAccount')); });
         document.getElementById('btnAccountBack').addEventListener('click',()=>{ sfxClick(); showScreen(document.getElementById('screenMenu')); });
