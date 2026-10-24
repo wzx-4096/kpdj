@@ -2604,7 +2604,7 @@
         let onlinePollTimer=null, onlinePollAfter=0, onlinePollMs=800, onlinePolling=false, onlineClosing=false;
         let netPc=null, netDc=null, netMode='', netFallbackTimer=null;
         let netWs=null, netWsReady=false, netWsTimer=null, netWsRetry=0;
-        let netState={seq:0,lastStateAt:0,lastInputAt:0,lastRecvAt:0,lastDamageAt:0};
+        let netState={seq:0,lastStateAt:0,lastInputAt:0,lastRecvAt:0,lastDamageAt:0,lastRelayAt:0};
 
         function roleById(id){
             if(!id) return null;
@@ -2628,7 +2628,7 @@
             netPendingOffer=''; netPendingAnswer='';
             _lastGuestTs=0;
             for(const k in netInputTs) delete netInputTs[k];
-            netState={seq:0,lastStateAt:0,lastInputAt:0,lastRecvAt:0,lastDamageAt:0};
+            netState={seq:0,lastStateAt:0,lastInputAt:0,lastRecvAt:0,lastDamageAt:0,lastRelayAt:0};
         }
 
         // ---------- 网络通道（P2P 直连 → WebSocket 中继 → 数据库轮询） ----------
@@ -2642,9 +2642,14 @@
             netDc=null; netPc=null; netMode=''; onlineBadge('');
         }
         function netSlowLabel(){ return netWsReady?'⚡ 中继':'📡 数据库'; }
+        // 中继双向可用：自己 WS 已开 且 最近 4 秒内收到过对端经中继发来的消息。
+        // 只有单边 WS 时（对方连不上中继）不能停止走数据库，否则对方永远收不到我方数据。
+        function netRelayActive(){
+            return !!(netWsReady&&netWs&&netWs.readyState===1&&performance.now()-(netState.lastRelayAt||0)<4000);
+        }
         function netSyncBadge(){
             onlineBadge(netMode==='p2p'?'🌐 直连':netSlowLabel());
-            onlinePollSet(netMode==='p2p'?2000:(netWsReady?1500:120));
+            onlinePollSet(netMode==='p2p'?2000:(netRelayActive()?1500:120));
         }
         // WebSocket 中继：向 Pages 申请一次性票据，连上后消息不再经过数据库
         function netRelayConnect(){
@@ -2662,7 +2667,7 @@
                     netWsReady=true; netWsRetry=0;
                     if(netMode!=='p2p') netSyncBadge();
                 };
-                ws.onmessage=ev=>{ if(netWs!==ws) return; try{ const m=JSON.parse(ev.data); if(m&&m.t) handleNetGame(m); }catch(e){} };
+                ws.onmessage=ev=>{ if(netWs!==ws) return; netState.lastRelayAt=performance.now(); try{ const m=JSON.parse(ev.data); if(m&&m.t) handleNetGame(m); }catch(e){} };
                 ws.onclose=()=>{
                     if(netWs!==ws) return;
                     netWs=null; netWsReady=false;
@@ -2791,7 +2796,11 @@
             }
             if(netWsReady&&netWs&&netWs.readyState===1){
                 if(kind!=='end'&&netWs.bufferedAmount>16384) return;
-                try{ netWs.send(s); return; }catch(e){}
+                try{ netWs.send(s); }catch(e){}
+                // 对端还没经中继发过消息（可能单边连不上）：每 4 条仍镜像一份到数据库
+                if(kind==='end'||netRelayActive()) return;
+                netState.mirror=(netState.mirror||0)+1;
+                if(netState.mirror%4) return;
             }
             if(kind==='end') return;
             authApi('/rooms/msg',{method:'POST',body:{kind,payload:s}}).catch(()=>{});
@@ -2807,9 +2816,9 @@
             if(kind==='answer'){ if(!onlineHost) return; if(!onlineStarted){ netPendingAnswer=payload; return; } netOnAnswer(payload); return; }
             if(!onlineStarted||!payload) return;
             try{
-                // WebSocket 中继已通时，数据库里的旧输入/快照直接丢弃，避免两路数据互相打断插值
-                if(kind==='input'){ if(onlineHost&&!(viaPoll&&netWsReady)) applyGuestInputObject(JSON.parse(payload)); }
-                else if(kind==='state'){ if(!onlineHost&&!(viaPoll&&netWsReady)) netApplyStateObject((JSON.parse(payload)||{}).d); }
+                // WebSocket 中继双向已通时，数据库里的旧输入/快照直接丢弃，避免两路数据互相打断插值
+                if(kind==='input'){ if(onlineHost&&!(viaPoll&&netRelayActive())) applyGuestInputObject(JSON.parse(payload)); }
+                else if(kind==='state'){ if(!onlineHost&&!(viaPoll&&netRelayActive())) netApplyStateObject((JSON.parse(payload)||{}).d); }
                 else if(kind==='end'){ if(!onlineHost) guestFinish((JSON.parse(payload)||{}).w||''); }
             }catch(e){}
         }
@@ -3158,6 +3167,8 @@
                     return;
                 }
                 onlineRoom=d.room; onlineRoomId=d.room.id;
+                // 中继是否双向可用会随对端连接情况变化：通了降频省流量，断了立刻恢复 120ms 兜底
+                if(netMode!=='p2p'&&netWsReady){ const want=netRelayActive()?1500:120; if(onlinePollMs!==want) netSyncBadge(); }
                 let lastState=null;
                 (d.msgs||[]).forEach(m=>{
                     if(m.id>onlinePollAfter) onlinePollAfter=m.id;
@@ -3165,7 +3176,7 @@
                     if(m.kind==='state'){ lastState=m.payload; return; }
                     handleRoomMessage(m.kind,m.payload,true);
                 });
-                if(lastState&&netGuest&&battleActive&&!netWsReady){ try{ netApplyStateObject((JSON.parse(lastState)||{}).d); }catch(e){} }
+                if(lastState&&netGuest&&battleActive&&!netRelayActive()){ try{ netApplyStateObject((JSON.parse(lastState)||{}).d); }catch(e){} }
                 if(onlineStarted){
                     if(d.room.status!=='battle'&&!onlineEnded) opponentLeft();
                 }else if(d.room.status==='battle'){
