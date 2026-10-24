@@ -2603,8 +2603,8 @@
         let netGuest=false, remoteEnt=null, netPendingOffer='', netPendingAnswer='';
         let onlinePollTimer=null, onlinePollAfter=0, onlinePollMs=800, onlinePolling=false, onlineClosing=false;
         let netPc=null, netDc=null, netMode='', netFallbackTimer=null;
-        let netWs=null, netWsReady=false, netWsTimer=null, netWsRetry=0;
-        let netState={seq:0,lastStateAt:0,lastInputAt:0,lastRecvAt:0,lastDamageAt:0,lastRelayAt:0};
+        let netWs=null, netWsReady=false, netWsTimer=null, netWsRetry=0, netPingTimer=null, netPingSeq=0;
+        let netState={seq:0,lastStateAt:0,lastInputAt:0,lastRecvAt:0,lastDamageAt:0,lastRelayAt:0,wsRtt:0,wsPongAt:0,wsReadyAt:0,lastSq:0,lastGuestQ:0,sseq:0};
 
         function roleById(id){
             if(!id) return null;
@@ -2628,28 +2628,62 @@
             netPendingOffer=''; netPendingAnswer='';
             _lastGuestTs=0;
             for(const k in netInputTs) delete netInputTs[k];
-            netState={seq:0,lastStateAt:0,lastInputAt:0,lastRecvAt:0,lastDamageAt:0,lastRelayAt:0};
+            netState={seq:0,lastStateAt:0,lastInputAt:0,lastRecvAt:0,lastDamageAt:0,lastRelayAt:0,wsRtt:0,wsPongAt:0,wsReadyAt:0,lastSq:0,lastGuestQ:0,sseq:0};
         }
 
         // ---------- 网络通道（P2P 直连 → WebSocket 中继 → 数据库轮询） ----------
         function netClose(){
             if(netFallbackTimer){ clearTimeout(netFallbackTimer); netFallbackTimer=null; }
             if(netWsTimer){ clearTimeout(netWsTimer); netWsTimer=null; }
+            if(netPingTimer){ clearInterval(netPingTimer); netPingTimer=null; }
             if(netWs){ const w=netWs; netWs=null; try{ w.onclose=null; w.close(); }catch(e){} }
             netWsReady=false; netWsRetry=0;
             try{ if(netDc) netDc.close(); }catch(e){}
             try{ if(netPc) netPc.close(); }catch(e){}
             netDc=null; netPc=null; netMode=''; onlineBadge('');
         }
-        function netSlowLabel(){ return netWsReady?'⚡ 中继':'📡 数据库'; }
-        // 中继双向可用：自己 WS 已开 且 最近 4 秒内收到过对端经中继发来的消息。
+        function netSlowLabel(){ return netWsHealthy()?'⚡ 中继':'📡 数据库'; }
+        // 中继健康：WebSocket 开着、1 秒一次的回执最近有回应、且实测往返 <400ms。
+        // 国内移动网络到 Cloudflare 的长连接经常被丢包堵死（实测 0.5s~9s），这种链路必须主动放弃，
+        // 否则会一直卡在 3 秒延迟；回执只用来测健康，不携带游戏数据。
+        function netWsHealthy(){
+            if(!netWsReady||!netWs||netWs.readyState!==1) return false;
+            const now=performance.now();
+            if(!netState.wsPongAt) return now-(netState.wsReadyAt||now)<4000;   // 刚连上给 4 秒宽限
+            if(now-netState.wsPongAt>6000) return false;
+            return (netState.wsRtt||0)<400;
+        }
+        // 中继双向可用：自己 WS 健康 且 最近 4 秒内收到过对端经中继发来的消息。
         // 只有单边 WS 时（对方连不上中继）不能停止走数据库，否则对方永远收不到我方数据。
         function netRelayActive(){
-            return !!(netWsReady&&netWs&&netWs.readyState===1&&performance.now()-(netState.lastRelayAt||0)<4000);
+            return !!(netWsHealthy()&&performance.now()-(netState.lastRelayAt||0)<4000);
         }
         function netSyncBadge(){
-            onlineBadge(netMode==='p2p'?'🌐 直连':netSlowLabel());
+            if(netMode==='p2p'){
+                onlineBadge('🌐 直连'+(netState.rtt?' · '+Math.round(netState.rtt)+'ms':''));
+            }else if(netWsHealthy()){
+                onlineBadge('⚡ 中继'+(netState.wsRtt?' · '+Math.round(netState.wsRtt)+'ms':''));
+            }else{
+                onlineBadge('📡 数据库');
+            }
             onlinePollSet(netMode==='p2p'?2000:(netRelayActive()?1500:120));
+        }
+        // 每秒发一次中继探测：既测链路健康，也用于发现"连接还在但数据全被堵住"的假在线
+        function netPingStart(){
+            if(netPingTimer) return;
+            netPingTimer=setInterval(()=>{
+                if(!onlineStarted||onlineEnded||!netWsReady||!netWs||netWs.readyState!==1) return;
+                const now=performance.now();
+                netState.pingSeq=++netPingSeq;
+                try{ netWs.send(JSON.stringify({t:'p',k:netState.pingSeq,ts:now})); }catch(e){}
+                if(netMode!=='p2p') netSyncBadge();   // 每秒刷新：健康变差立刻显示 📡 并恢复 120ms 轮询
+                const last=netState.wsPongAt||netState.wsReadyAt||0;
+                if(last&&now-last>12000){    // 12 秒没有任何回执：这条路已被丢包堵死，断开换一条链路
+                    const w=netWs; netWs=null; netWsReady=false;
+                    try{ w.onclose=null; w.close(); }catch(e){}
+                    netSyncBadge(); netRelayRetry();
+                }
+            },1000);
         }
         // WebSocket 中继：向 Pages 申请一次性票据，连上后消息不再经过数据库
         function netRelayConnect(){
@@ -2665,9 +2699,23 @@
                 ws.onopen=()=>{
                     if(netWs!==ws) return;
                     netWsReady=true; netWsRetry=0;
+                    netState.wsReadyAt=performance.now(); netState.wsPongAt=0; netState.wsRtt=0;
+                    netPingStart();
                     if(netMode!=='p2p') netSyncBadge();
                 };
-                ws.onmessage=ev=>{ if(netWs!==ws) return; netState.lastRelayAt=performance.now(); try{ const m=JSON.parse(ev.data); if(m&&m.t) handleNetGame(m); }catch(e){} };
+                ws.onmessage=ev=>{
+                    if(netWs!==ws) return;
+                    netState.lastRelayAt=performance.now();
+                    try{
+                        const m=JSON.parse(ev.data);
+                        if(m&&m.t==='p'){
+                            if(m.re){ if(m.k===netState.pingSeq){ netState.wsRtt=performance.now()-m.ts; netState.wsPongAt=performance.now(); if(netMode!=='p2p') netSyncBadge(); } }
+                            else if(m.k){ try{ ws.send(JSON.stringify({t:'p',k:m.k,re:1,ts:m.ts})); }catch(e){} }
+                            return;
+                        }
+                        if(m&&m.t) handleNetGame(m);
+                    }catch(e){}
+                };
                 ws.onclose=()=>{
                     if(netWs!==ws) return;
                     netWs=null; netWsReady=false;
@@ -2722,7 +2770,13 @@
                 },4000);
             };
         }
-        const NET_ICE={ iceServers:[{urls:['stun:stun.cloudflare.com:3478','stun:stun.l.google.com:19302','stun:stun1.l.google.com:19302','stun:stun.miwifi.com:3478']}] };
+        // 免费公共 TURN（Open Relay）：两家运营商 CGNAT 下 P2P 才可能打通，打不通还能经 TURN 中转；
+        // 报文有 DTLS 端到端加密，TURN 服务器看不到内容。能打直连时完全不经过它。
+        const NET_ICE={ iceServers:[
+            {urls:['stun:stun.cloudflare.com:3478','stun:stun.l.google.com:19302','stun:stun1.l.google.com:19302','stun:stun.miwifi.com:3478']},
+            {urls:['turn:openrelay.metered.ca:80','turn:openrelay.metered.ca:443','turns:openrelay.metered.ca:443?transport=tcp'],
+             username:'openrelayproject',credential:'openrelayproject'}
+        ] };
         async function netConnect(){
             netClose();
             netMode='relay';
@@ -2777,7 +2831,7 @@
             netSend(Object.assign({t:'i',m:[joyMove.x,joyMove.y],q},extra||{}));
         }
         function netShowLatency(){
-            if(!battleActive||onlineEnded||!netState.rtt) return;
+            if(netMode!=='p2p'||!battleActive||onlineEnded||!netState.rtt) return;
             const now=performance.now();
             if(now-(netState.rttAt||0)<600) return;
             netState.rttAt=now;
@@ -2794,7 +2848,7 @@
                 if(kind!=='end'&&netDc.bufferedAmount>8192) return;
                 try{ netDc.send(s); return; }catch(e){}
             }
-            if(netWsReady&&netWs&&netWs.readyState===1){
+            if(netWsReady&&netWs&&netWs.readyState===1&&(kind==='end'||netWsHealthy())){
                 if(kind!=='end'&&netWs.bufferedAmount>16384) return;
                 try{ netWs.send(s); }catch(e){}
                 // 对端还没经中继发过消息（可能单边连不上）：每 4 条仍镜像一份到数据库
@@ -2816,14 +2870,18 @@
             if(kind==='answer'){ if(!onlineHost) return; if(!onlineStarted){ netPendingAnswer=payload; return; } netOnAnswer(payload); return; }
             if(!onlineStarted||!payload) return;
             try{
-                // WebSocket 中继双向已通时，数据库里的旧输入/快照直接丢弃，避免两路数据互相打断插值
-                if(kind==='input'){ if(onlineHost&&!(viaPoll&&netRelayActive())) applyGuestInputObject(JSON.parse(payload)); }
-                else if(kind==='state'){ if(!onlineHost&&!(viaPoll&&netRelayActive())) netApplyStateObject((JSON.parse(payload)||{}).d); }
+                // 两路（中继 + 数据库）可能同时到，按序号去重，只应用更新的数据；不按通道粗细过滤，
+                // 否则一边改走下坡通道（中继变慢自动降级到数据库）另一边会把它的消息当成重复丢掉
+                if(kind==='input'){ if(onlineHost) applyGuestInputObject(JSON.parse(payload)); }
+                else if(kind==='state'){ if(!onlineHost) netApplyStateObject((JSON.parse(payload)||{}).d); }
                 else if(kind==='end'){ if(!onlineHost) guestFinish((JSON.parse(payload)||{}).w||''); }
             }catch(e){}
         }
         function applyGuestInputObject(d){
             if(!d||!onlineHost||!battleActive||!remoteEnt||remoteEnt.hp<=0) return;
+            // 序号去重：数据库镜像可能比中继晚到，旧输入要丢，否则会把角色往回拽
+            if(d.q&&d.q<=(netState.lastGuestQ||0)) return;
+            if(d.q) netState.lastGuestQ=d.q;
             netState.lastInputAt=performance.now();
             if(d.q) netState.ack=d.q;                  // 回显给客机测延迟
             const m=d.m||[0,0];
@@ -2841,6 +2899,7 @@
         function serializeNetState(){
             const now=performance.now();
             return {
+                q:++netState.sseq,
                 a:netState.ack||0,
                 e:entities.map(e=>({
                     u:e.uid,r:e.role.id,o:e.owner,
@@ -2864,6 +2923,9 @@
         }
         function netApplyStateObject(d){
             if(!d||!d.e||!netGuest||!battleActive) return;
+            // 数据库镜像的快照可能比中继晚到，序号更旧的直接丢掉，避免画面被回拽
+            if(d.q&&d.q<=(netState.lastSq||0)) return;
+            if(d.q) netState.lastSq=d.q;
             const now=performance.now();
             netState.lastRecvAt=now;
             if(d.a&&netInputTs[d.a]){
@@ -3176,7 +3238,7 @@
                     if(m.kind==='state'){ lastState=m.payload; return; }
                     handleRoomMessage(m.kind,m.payload,true);
                 });
-                if(lastState&&netGuest&&battleActive&&!netRelayActive()){ try{ netApplyStateObject((JSON.parse(lastState)||{}).d); }catch(e){} }
+                if(lastState&&netGuest&&battleActive){ try{ netApplyStateObject((JSON.parse(lastState)||{}).d); }catch(e){} }
                 if(onlineStarted){
                     if(d.room.status!=='battle'&&!onlineEnded) opponentLeft();
                 }else if(d.room.status==='battle'){
@@ -3203,7 +3265,7 @@
                 _lastGuestTs=0;
                 netState.lastRecvAt=performance.now();
                 netState.lastInputAt=performance.now();
-                netState.lastStateAt=0; netState.seq=0;
+                netState.lastStateAt=0; netState.seq=0; netState.sseq=0; netState.lastSq=0; netState.lastGuestQ=0;
                 netSyncBadge();
             });
             netConnect();
