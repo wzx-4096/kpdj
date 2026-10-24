@@ -80,3 +80,21 @@ CREATE TABLE IF NOT EXISTS room_msgs (
 );
 
 CREATE INDEX IF NOT EXISTS idx_room_msgs ON room_msgs(room_id, id);
+
+-- 客服留言：玩家在「客服」里发的内容，同步给 MTC 后台查看
+CREATE TABLE IF NOT EXISTS support_msgs (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  pid        TEXT,                          -- 登录用户的 pid；未登录为 NULL
+  name       TEXT NOT NULL,                 -- 昵称/账号快照；未登录为「游客」
+  body       TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+
+-- 故事模式进度：按账号云端保存，换设备登录可直接续玩
+CREATE TABLE IF NOT EXISTS story_progress (
+  pid        TEXT PRIMARY KEY,
+  clear_lv   INTEGER NOT NULL DEFAULT 0,    -- 已通关到第几关（0 = 只解锁序章）
+  hide       TEXT,                          -- 隐藏关卡下标的 JSON 数组（开发者选项）
+  updated_at INTEGER NOT NULL
+);
+

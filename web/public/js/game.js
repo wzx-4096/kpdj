@@ -339,13 +339,17 @@
         ];
         const STORY_TOP=96, STORY_GAP=132;
         // 故事关卡隐藏开关（开发者选项）：默认隐藏第 1 关
-        let storyHideSet=new Set();
+        let storyHideSet=new Set(), storyHideLocal=false;
         try{
             const raw=localStorage.getItem('storyHide');
-            if(raw) storyHideSet=new Set(JSON.parse(raw));
+            if(raw){ storyHideLocal=true; storyHideSet=new Set(JSON.parse(raw)); }
             else storyHideSet=new Set([1]);
         }catch(e){ storyHideSet=new Set([1]); }
-        function storyHideSave(){ try{ localStorage.setItem('storyHide',JSON.stringify([...storyHideSet])); }catch(e){} }
+        function storyHideSave(){
+            storyHideLocal=true;
+            try{ localStorage.setItem('storyHide',JSON.stringify([...storyHideSet])); }catch(e){}
+            storyPush();
+        }
         function renderDevStoryList(){
             const box=document.getElementById('devStoryList'); if(!box) return;
             box.innerHTML='';
@@ -760,6 +764,7 @@
                 if(!bothAlive) stars=Math.max(1,stars-1);
                 storyClear=Math.max(storyClear,curStoryLevel+1);
                 try{ localStorage.setItem('storyClear',''+storyClear); }catch(e){}
+                storyPush();
                 psetTimeout(()=>showStoryResult(stars),200);
             } else {
                 // 两人都死：李晨雨训话后 0 星，直接不通关
@@ -770,7 +775,7 @@
             stopBattle();
             // 赢：按自己剩余血量定星（2~5星）；输：一律 0 星失败，绝不按敌方血量评星
             const stars=win?(ratio>=0.75?5:ratio>=0.5?4:ratio>=0.25?3:2):0;
-            if(win){ storyClear=Math.max(storyClear,curStoryLevel+1); try{ localStorage.setItem('storyClear',''+storyClear); }catch(e){} }
+            if(win){ storyClear=Math.max(storyClear,curStoryLevel+1); try{ localStorage.setItem('storyClear',''+storyClear); }catch(e){} storyPush(); }
             // 序章败北：浮琴训斥"赶紧给我去学校🤬🤬🤬"后 0 星失败；其余关卡失败直接 0 星
             psetTimeout(()=>{ if(!win&&curStoryLevel===0) fqScoldThen(0); else showStoryResult(stars); },200);
         }
@@ -2236,11 +2241,20 @@
             ];
             csThinkThen(pool[Math.floor(Math.random()*pool.length)]);
         }
+        // 同步给 MTC 后台：登录了带 token 记名，未登录按游客记录
+        function supportSend(text){
+            try{
+                const headers={'content-type':'application/json'};
+                if(authToken) headers.authorization='Bearer '+authToken;
+                fetch('/api/support/msg',{method:'POST',headers,body:JSON.stringify({body:String(text).slice(0,500)})}).catch(()=>{});
+            }catch(e){}
+        }
         function csSendMsg(){
             if(csBusy) return;
             const v=csInput.value; if(!v.trim()) return;
             csPush(v,true); sfxClick();
             csInput.value='';
+            supportSend(v);
             csReply(v);
         }
         csSend.addEventListener('click',csSendMsg);
@@ -2264,6 +2278,7 @@
             authToken=t||''; authUser=u||null;
             try{ if(authToken) localStorage.setItem(AUTH_TOKEN_KEY,authToken); else localStorage.removeItem(AUTH_TOKEN_KEY); }catch(e){}
             authRender();
+            if(u) storySync();
         }
         async function authApi(path,opts){
             const o=opts||{}, headers={'content-type':'application/json'};
@@ -2274,6 +2289,37 @@
             let data=null; try{ data=await res.json(); }catch(e){}
             if(!res.ok){ const er=new Error((data&&data.error&&data.error.message)||('请求失败 '+res.status)); er.status=res.status; throw er; }
             return data||{};
+        }
+        // ---------- 故事进度云端同步（登录后拉取合并，变更后自动推送） ----------
+        let storyPushTimer=null;
+        function storyPush(){
+            if(!authToken) return;
+            clearTimeout(storyPushTimer);
+            storyPushTimer=setTimeout(()=>{
+                authApi('/story',{method:'POST',body:{clear:storyClear,hide:[...storyHideSet]}}).catch(()=>{});
+            },1200);
+        }
+        function storySync(){
+            if(!authToken) return;
+            authApi('/story').then(d=>{
+                if(!d) return;
+                const rc=Math.max(0,Math.min(STORY_LEVELS.length-1,parseInt(d.clear,10)||0));
+                let changed=false;
+                if(rc>storyClear){
+                    storyClear=rc;
+                    try{ localStorage.setItem('storyClear',''+storyClear); }catch(e){}
+                    changed=true;
+                }
+                // 本机从没改过隐藏关卡时，才采用账号上的设置（否则以本机为准）
+                if(d.exists&&!storyHideLocal&&Array.isArray(d.hide)){
+                    storyHideSet=new Set(d.hide.filter(n=>Number.isInteger(n)&&n>=0&&n<STORY_LEVELS.length));
+                    storyHideLocal=true;
+                    try{ localStorage.setItem('storyHide',JSON.stringify([...storyHideSet])); }catch(e){}
+                    changed=true;
+                }
+                if(changed){ buildStoryMap(); renderDevStoryList(); }
+                if(storyClear>rc) storyPush();          // 本地打得更远（离线/换设备前）：反向补传
+            }).catch(()=>{});
         }
         function displayName(u){ return u?(u.nickname||u.username):''; }
         function setAvatarEl(imgEl,fbEl,avatar){
@@ -2337,7 +2383,7 @@
         function authInit(){
             authRead(); authRender();
             if(!authToken) return;
-            authApi('/auth/me').then(d=>{ authUser=d.user; authRender(); friendsRefreshBadge(); }).catch(e=>{ if(e.status===401) authSave('',null); });
+            authApi('/auth/me').then(d=>{ authUser=d.user; authRender(); storySync(); friendsRefreshBadge(); }).catch(e=>{ if(e.status===401) authSave('',null); });
         }
 
         // ---------- 账号设置 ----------

@@ -38,6 +38,14 @@
     .empty { padding:28px 12px; text-align:center; color:#7d8ab0; font-size:12px; }
     .foot { display:flex; gap:8px; margin-top:14px; }
     .foot button { flex:1; }
+    .tabs { display:flex; gap:8px; margin-bottom:12px; }
+    .tabs button { flex:1; font-size:13px; padding:8px 10px; }
+    .tabs button.active { background:rgba(240,192,96,0.18); border-color:#f0c060; color:#ffe6a8; }
+    .mrow { display:flex; flex-direction:column; gap:5px; padding:10px 12px; border-bottom:1px solid rgba(255,255,255,0.07); }
+    .mrow:last-child { border-bottom:none; }
+    .mrow .mhead { display:flex; align-items:center; gap:8px; font-size:10px; color:#8a93b8; }
+    .mrow .mname { color:#fff; font-size:13px; font-weight:800; }
+    .mrow .mbody { font-size:13px; line-height:1.55; color:#dde3ff; word-break:break-word; white-space:pre-wrap; }
     .hidden { display:none !important; }
 </style>
 </head>
@@ -55,13 +63,27 @@
 
     <!-- 玩家列表 -->
     <div id="adminView" class="hidden">
-        <div class="bar">
-            <span class="count" id="count">共 0 名玩家</span>
-            <button id="btnRefresh" type="button">刷新</button>
-            <button class="danger" id="btnLogout" type="button">退出</button>
+        <div class="tabs">
+            <button id="tabPlayers" type="button" class="active">玩家</button>
+            <button id="tabSupport" type="button">客服消息</button>
         </div>
-        <div class="live"><span class="dot"></span><span id="liveText">自动刷新中</span></div>
-        <div class="list" id="list"><div class="empty">加载中…</div></div>
+        <div id="playersPane">
+            <div class="bar">
+                <span class="count" id="count">共 0 名玩家</span>
+                <button id="btnRefresh" type="button">刷新</button>
+                <button class="danger" id="btnLogout" type="button">退出</button>
+            </div>
+            <div class="live"><span class="dot"></span><span id="liveText">自动刷新中</span></div>
+            <div class="list" id="list"><div class="empty">加载中…</div></div>
+        </div>
+        <div id="supportPane" class="hidden">
+            <div class="bar">
+                <span class="count" id="supCount">共 0 条留言</span>
+                <button id="btnRefreshSup" type="button">刷新</button>
+            </div>
+            <div class="live"><span class="dot"></span><span id="supLive">自动刷新中</span></div>
+            <div class="list" id="supList"><div class="empty">加载中…</div></div>
+        </div>
         <div class="foot"><button id="btnBack" type="button">← 返回游戏</button></div>
         <div class="err" id="adminErr"></div>
     </div>
@@ -84,7 +106,14 @@
     var count = document.getElementById('count');
     var btnLogin = document.getElementById('btnLogin');
     var liveText = document.getElementById('liveText');
-    var deleting = false, autoTimer = null, lastSig = '';
+    var playersPane = document.getElementById('playersPane');
+    var supportPane = document.getElementById('supportPane');
+    var supList = document.getElementById('supList');
+    var supCount = document.getElementById('supCount');
+    var supLive = document.getElementById('supLive');
+    var tabPlayers = document.getElementById('tabPlayers');
+    var tabSupport = document.getElementById('tabSupport');
+    var deleting = false, autoTimer = null, lastSig = '', lastSupSig = '', tabMode = 'players';
 
     function saveToken(t) {
         token = t || '';
@@ -132,7 +161,9 @@
     }
 
     function touchLive() {
-        if (liveText) liveText.textContent = '已是最新 · ' + fmtClock(new Date()) + ' · 每 15 秒自动刷新';
+        var txt = '已是最新 · ' + fmtClock(new Date()) + ' · 每 15 秒自动刷新';
+        if (liveText) liveText.textContent = txt;
+        if (supLive) supLive.textContent = txt;
     }
 
     function startAuto() {
@@ -140,7 +171,7 @@
         autoTimer = setInterval(function () {
             if (document.hidden) return;
             if (adminView.classList.contains('hidden')) return;
-            loadPlayers(true);
+            if (tabMode === 'players') loadPlayers(true); else loadSupport(true);
         }, 15000);
     }
 
@@ -163,7 +194,86 @@
         adminView.classList.remove('hidden');
         adminErr.textContent = '';
         loadPlayers(false);
+        loadSupport(true);                 // 静默拉一次，切标签页就有数据
         startAuto();
+    }
+
+    // ---------- 客服消息 ----------
+    function sigOfSupport(msgs) {
+        return msgs.map(function (m) { return m.id + '|' + m.name + '|' + m.body; }).join(';');
+    }
+
+    function loadSupport(silent) {
+        if (!silent) {
+            adminErr.textContent = '';
+            supList.innerHTML = '';
+            var loading = document.createElement('div');
+            loading.className = 'empty';
+            loading.textContent = '加载中…';
+            supList.appendChild(loading);
+        }
+        api('/admin/support?limit=100').then(function (data) {
+            var msgs = data.messages || [];
+            if (silent && sigOfSupport(msgs) === lastSupSig) { touchLive(); return; }
+            renderSupport(msgs, data.total || 0);
+            touchLive();
+        }).catch(function (e) {
+            if (e.status === 401) { showLogin('登录已失效，请重新输入管理员密码'); return; }
+            adminErr.textContent = e.message;
+            if (!silent) {
+                supList.innerHTML = '';
+                var box = document.createElement('div');
+                box.className = 'empty';
+                box.textContent = e.message;
+                supList.appendChild(box);
+            }
+        });
+    }
+
+    function renderSupport(msgs, total) {
+        supCount.textContent = '共 ' + total + ' 条留言' + (msgs.length < total ? '（显示最近 ' + msgs.length + ' 条）' : '');
+        lastSupSig = sigOfSupport(msgs);
+        supList.innerHTML = '';
+        if (!msgs.length) {
+            var empty = document.createElement('div');
+            empty.className = 'empty';
+            empty.textContent = '还没有客服留言';
+            supList.appendChild(empty);
+            return;
+        }
+        msgs.forEach(function (m) {
+            var row = document.createElement('div');
+            row.className = 'mrow';
+
+            var head = document.createElement('div');
+            head.className = 'mhead';
+            var nm = document.createElement('span');
+            nm.className = 'mname';
+            nm.textContent = m.name || '游客';
+            var meta = document.createElement('span');
+            meta.textContent = (m.pid || '未登录') + ' · ' + fmtTime(m.created_at);
+            head.appendChild(nm);
+            head.appendChild(meta);
+
+            // 留言正文用 textContent，防止玩家输入注入 HTML
+            var body = document.createElement('div');
+            body.className = 'mbody';
+            body.textContent = m.body;
+
+            row.appendChild(head);
+            row.appendChild(body);
+            supList.appendChild(row);
+        });
+    }
+
+    function showTab(mode) {
+        tabMode = mode;
+        var isPlayers = mode === 'players';
+        playersPane.classList.toggle('hidden', !isPlayers);
+        supportPane.classList.toggle('hidden', isPlayers);
+        tabPlayers.classList.toggle('active', isPlayers);
+        tabSupport.classList.toggle('active', !isPlayers);
+        if (isPlayers) loadPlayers(false); else loadSupport(false);
     }
 
     function loadPlayers(silent) {
@@ -292,10 +402,14 @@
 
     pwd.addEventListener('keydown', function (e) { if (e.key === 'Enter') btnLogin.click(); });
     document.getElementById('btnRefresh').addEventListener('click', function () { loadPlayers(false); });
+    document.getElementById('btnRefreshSup').addEventListener('click', function () { loadSupport(false); });
+    tabPlayers.addEventListener('click', function () { showTab('players'); });
+    tabSupport.addEventListener('click', function () { showTab('support'); });
     document.getElementById('btnLogout').addEventListener('click', function () { showLogin('已退出管理员登录'); });
     document.getElementById('btnBack').addEventListener('click', function () { location.href = './index.html'; });
     document.addEventListener('visibilitychange', function () {
-        if (!document.hidden && !adminView.classList.contains('hidden')) loadPlayers(true);
+        if (document.hidden || adminView.classList.contains('hidden')) return;
+        if (tabMode === 'players') loadPlayers(true); else loadSupport(true);
     });
 
     // 有 token 时先验证一次再进后台

@@ -24,6 +24,10 @@
 //   POST   /api/rooms/msg       { kind, payload }
 //   POST   /api/rooms/ticket    （签发 WebSocket 中继票据，返回 { ticket, url }）
 //   POST   /api/rtc/sig         （签发 TRTC 进房签名，返回 { sdkAppId, userId, userSig, roomId }）
+//   POST   /api/support/msg     { body }（客服留言，未登录也可发，登录则记 pid/昵称）
+//   GET    /api/story           （故事进度，Bearer 玩家 token）
+//   POST   /api/story           { clear, hide }（只升不降）
+//   GET    /api/admin/support   （Bearer 管理员 token，客服留言列表）
 //   POST   /api/admin/login     { password }
 //   GET    /api/admin/players   （Bearer 管理员 token）
 //   DELETE /api/admin/players/:pid（Bearer 管理员 token）
@@ -807,6 +811,87 @@ async function handleRtcSig(request, env) {
   });
 }
 
+// ---------- 客服留言（同步到 MTC 后台） ----------
+const SUPPORT_MAX = 500;
+const supportHits = new Map();
+function supportLimited(key) {
+  const now = Date.now();
+  const rec = supportHits.get(key);
+  if (rec && now - rec.t < 60000) { rec.n++; if (rec.n > 12) return true; }
+  else supportHits.set(key, { t: now, n: 1 });
+  if (supportHits.size > 5000) supportHits.clear();
+  return false;
+}
+// 记名可选：登录了就带 pid 和昵称，没登录也允许留言（客服入口不需要登录）
+async function optionalPlayer(request, env) {
+  try {
+    if (!env.DB || !env.SESSION_SECRET) return null;
+    const payload = await verifyToken(bearer(request), env.SESSION_SECRET);
+    if (!payload || payload.r !== 'player') return null;
+    return await env.DB.prepare('SELECT pid, username, nickname FROM players WHERE pid = ?').bind(payload.s).first() || null;
+  } catch (e) { return null; }
+}
+async function handleSupportMsg(request, env) {
+  if (!env.DB) return fail('DB_NOT_BOUND', 'D1 数据库未绑定', 500);
+  const body = await readJson(request);
+  if (!body) return fail('INVALID_BODY', '请求体必须为 JSON');
+  const text = String(body.body == null ? '' : body.body).trim();
+  if (!text) return fail('INVALID_BODY', '留言内容不能为空');
+  if (text.length > SUPPORT_MAX) return fail('TOO_LONG', `留言最多 ${SUPPORT_MAX} 字`);
+
+  const user = await optionalPlayer(request, env);
+  if (supportLimited(user ? user.pid : (request.headers.get('cf-connecting-ip') || 'anon'))) {
+    return fail('TOO_MANY', '发送太频繁，请稍后再试', 429);
+  }
+  const name = user ? (user.nickname || user.username) : '游客';
+  await env.DB.prepare('INSERT INTO support_msgs (pid, name, body, created_at) VALUES (?, ?, ?, ?)')
+    .bind(user ? user.pid : null, name, text, nowSec()).run();
+  return json({ ok: true });
+}
+async function handleAdminSupport(url, request, env) {
+  if (!env.DB) return fail('DB_NOT_BOUND', 'D1 数据库未绑定', 500);
+  const auth = await requireAdmin(request, env);
+  if (auth.error) return auth.error;
+
+  const limit = clampLimit(url.searchParams.get('limit'), 100, 300);
+  const [list, total] = await Promise.all([
+    env.DB.prepare('SELECT id, pid, name, body, created_at FROM support_msgs ORDER BY id DESC LIMIT ?').bind(limit).all(),
+    env.DB.prepare('SELECT COUNT(*) AS n FROM support_msgs').first()
+  ]);
+  return json({ total: (total && total.n) || 0, limit, messages: (list && list.results) || [] });
+}
+
+// ---------- 故事模式进度（按账号云端保存） ----------
+async function handleStoryGet(request, env) {
+  const auth = await requirePlayer(request, env);
+  if (auth.error) return auth.error;
+  const row = await env.DB.prepare('SELECT clear_lv, hide, updated_at FROM story_progress WHERE pid = ?').bind(auth.user.pid).first();
+  let hide = [];
+  if (row && row.hide) { try { hide = JSON.parse(row.hide); } catch (e) { hide = []; } }
+  return json({ exists: !!row, clear: row ? row.clear_lv : 0, hide, updated_at: row ? row.updated_at : 0 });
+}
+async function handleStorySave(request, env) {
+  const auth = await requirePlayer(request, env);
+  if (auth.error) return auth.error;
+  const body = await readJson(request);
+  if (!body) return fail('INVALID_BODY', '请求体必须为 JSON');
+
+  let clear = parseInt(body.clear, 10);
+  if (!isFinite(clear) || clear < 0) clear = 0;
+  clear = Math.min(clear, 20);
+  let hide = [];
+  if (Array.isArray(body.hide)) {
+    hide = body.hide.map(n => parseInt(n, 10)).filter(n => n >= 0 && n < 64);
+    hide = Array.from(new Set(hide)).slice(0, 32);
+  }
+  // 只升不降：换旧设备登录也不会把进度覆盖回去
+  await env.DB.prepare(
+    'INSERT INTO story_progress (pid, clear_lv, hide, updated_at) VALUES (?, ?, ?, ?) ' +
+    'ON CONFLICT(pid) DO UPDATE SET clear_lv = MAX(story_progress.clear_lv, excluded.clear_lv), hide = excluded.hide, updated_at = excluded.updated_at'
+  ).bind(auth.user.pid, clear, JSON.stringify(hide), nowSec()).run();
+  return json({ ok: true, clear, hide });
+}
+
 // ---------- 管理员 ----------
 async function handleAdminLogin(request, env) {
   if (!env.SESSION_SECRET) return fail('NO_SESSION_SECRET', '服务端未配置 SESSION_SECRET', 500);
@@ -873,7 +958,14 @@ async function handleAdminMigrate(request, env) {
       id INTEGER PRIMARY KEY AUTOINCREMENT, room_id TEXT NOT NULL, from_pid TEXT NOT NULL,
       kind TEXT NOT NULL, payload TEXT, created_at INTEGER NOT NULL
     )`,
-    'CREATE INDEX IF NOT EXISTS idx_room_msgs ON room_msgs(room_id, id)'
+    'CREATE INDEX IF NOT EXISTS idx_room_msgs ON room_msgs(room_id, id)',
+    `CREATE TABLE IF NOT EXISTS support_msgs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, pid TEXT, name TEXT NOT NULL,
+      body TEXT NOT NULL, created_at INTEGER NOT NULL
+    )`,
+    `CREATE TABLE IF NOT EXISTS story_progress (
+      pid TEXT PRIMARY KEY, clear_lv INTEGER NOT NULL DEFAULT 0, hide TEXT, updated_at INTEGER NOT NULL
+    )`
   ];
   for (const sql of ddl) await env.DB.prepare(sql).run();
   return json({ ok: true, applied: ddl.length });
@@ -922,6 +1014,10 @@ export async function onRequest(context) {
     if (path === '/api/rooms/msg' && method === 'POST') return handleRoomMsg(request, env);
     if (path === '/api/rooms/ticket' && method === 'POST') return handleRoomTicket(request, env);
     if (path === '/api/rtc/sig' && method === 'POST') return handleRtcSig(request, env);
+    if (path === '/api/support/msg' && method === 'POST') return handleSupportMsg(request, env);
+    if (path === '/api/story' && method === 'GET') return handleStoryGet(request, env);
+    if (path === '/api/story' && method === 'POST') return handleStorySave(request, env);
+    if (path === '/api/admin/support' && method === 'GET') return handleAdminSupport(url, request, env);
     if (path === '/api/admin/login' && method === 'POST') return handleAdminLogin(request, env);
     if (path === '/api/admin/players' && method === 'GET') return handleAdminPlayers(url, request, env);
     if (path === '/api/admin/migrate' && method === 'POST') return handleAdminMigrate(request, env);
