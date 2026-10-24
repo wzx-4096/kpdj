@@ -52,7 +52,7 @@
 <body>
 <div class="card">
     <h1>🛠 MTC 管理后台</h1>
-    <div class="sub">管理员入口 · 与玩家账号完全独立 · v1.1 昵称头像</div>
+    <div class="sub">管理员入口 · 与玩家账号完全独立 · v1.2 员工模式</div>
 
     <!-- 登录 -->
     <div id="loginView">
@@ -115,9 +115,25 @@
     var tabSupport = document.getElementById('tabSupport');
     var deleting = false, autoTimer = null, lastSig = '', lastSupSig = '', tabMode = 'players';
 
-    function saveToken(t) {
+    // 角色：admin = 管理员（可删账号）；staff = 员工（只读）。登录接口返回，或从 token 里解出
+    var ROLE_KEY = 'mtcAdminRole';
+    function roleOf(t) {
+        try {
+            var body = String(t).split('.')[0].replace(/-/g, '+').replace(/_/g, '/');
+            var json = JSON.parse(atob(body + '==='.slice((body.length + 3) % 4)));
+            return json && json.r === 'admin' ? 'admin' : 'staff';
+        } catch (e) { return 'staff'; }
+    }
+    var role = 'staff';
+    try { role = sessionStorage.getItem(ROLE_KEY) || (token ? roleOf(token) : 'staff'); } catch (e) { role = token ? roleOf(token) : 'staff'; }
+
+    function saveToken(t, r) {
         token = t || '';
-        try { if (token) sessionStorage.setItem(TOKEN_KEY, token); else sessionStorage.removeItem(TOKEN_KEY); } catch (e) {}
+        if (t) role = r === 'admin' ? 'admin' : 'staff';
+        try {
+            if (token) sessionStorage.setItem(TOKEN_KEY, token); else sessionStorage.removeItem(TOKEN_KEY);
+            if (token) sessionStorage.setItem(ROLE_KEY, role); else sessionStorage.removeItem(ROLE_KEY);
+        } catch (e) {}
     }
 
     function api(path, opts) {
@@ -305,7 +321,7 @@
     }
 
     function renderPlayers(players, total) {
-        count.textContent = '共 ' + total + ' 名玩家' + (players.length < total ? '（显示最近 ' + players.length + ' 名）' : '');
+        count.textContent = (role === 'admin' ? '' : '员工模式 · ') + '共 ' + total + ' 名玩家' + (players.length < total ? '（显示最近 ' + players.length + ' 名）' : '');
         lastSig = sigOf(players);
         list.innerHTML = '';
         if (!players.length) {
@@ -356,18 +372,22 @@
             info.appendChild(meta);
             row.appendChild(info);
 
-            var del = document.createElement('button');
-            del.className = 'danger';
-            del.type = 'button';
-            del.textContent = '删除';
-            del.addEventListener('click', function () { removePlayer(p); });
-            row.appendChild(del);
+            // 删除按钮只给管理员，员工账号服务端也会拒绝（403）
+            if (role === 'admin') {
+                var del = document.createElement('button');
+                del.className = 'danger';
+                del.type = 'button';
+                del.textContent = '删除';
+                del.addEventListener('click', function () { removePlayer(p); });
+                row.appendChild(del);
+            }
 
             list.appendChild(row);
         });
     }
 
     function removePlayer(p) {
+        if (role !== 'admin') return;
         var label = p.nickname || p.username;
         if (!confirm('确定删除玩家「' + label + '」（@' + p.username + '）？\n删除后该账号无法再登录，数据不可恢复。')) return;
         deleting = true;
@@ -389,7 +409,7 @@
         btnLogin.disabled = true;
         loginErr.textContent = '';
         api('/admin/login', { method: 'POST', body: { password: password } }).then(function (data) {
-            saveToken(data.token);
+            saveToken(data.token, data.role);
             btnLogin.disabled = false;
             showAdmin();
         }).catch(function (e) {

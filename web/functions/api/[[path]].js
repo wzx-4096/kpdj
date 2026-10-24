@@ -32,7 +32,7 @@
 //   POST   /api/admin/login     { password }
 //   GET    /api/admin/players   （Bearer 管理员 token）
 //   DELETE /api/admin/players/:pid（Bearer 管理员 token）
-// 环境变量/绑定：DB（D1）、SESSION_SECRET、ADMIN_PASS_HASH、DEV_PASS_HASH、RELAY_SECRET、RELAY_URL、TRTC_SDKAPPID、TRTC_SECRET
+// 环境变量/绑定：DB（D1）、SESSION_SECRET、ADMIN_PASS_HASH、STAFF_PASS_HASH、DEV_PASS_HASH、RELAY_SECRET、RELAY_URL、TRTC_SDKAPPID、TRTC_SECRET
 // 密码只存 PBKDF2-SHA256 哈希（pbkdf2$迭代数$盐$哈希），不存明文。
 
 const PBKDF2_ITER = 12000;                                  // Workers 免费版单次 10ms CPU，迭代数不能太高
@@ -177,6 +177,13 @@ async function requireAdmin(request, env) {
   const payload = await verifyToken(bearer(request), env.SESSION_SECRET);
   if (!payload || payload.r !== 'admin') return { error: fail('UNAUTHORIZED', '管理员登录已失效，请重新登录', 401) };
   return { ok: true };
+}
+// 员工（低配）：能看玩家/客服消息，但不能删账号
+async function requireStaff(request, env) {
+  if (!env.SESSION_SECRET) return { error: fail('NO_SESSION_SECRET', '服务端未配置 SESSION_SECRET', 500) };
+  const payload = await verifyToken(bearer(request), env.SESSION_SECRET);
+  if (!payload || (payload.r !== 'admin' && payload.r !== 'staff')) return { error: fail('UNAUTHORIZED', '登录已失效，请重新登录', 401) };
+  return { ok: true, role: payload.r };
 }
 async function friendRow(env, a, b) {
   const [pa, pb] = pairOf(a, b);
@@ -851,7 +858,7 @@ async function handleSupportMsg(request, env) {
 }
 async function handleAdminSupport(url, request, env) {
   if (!env.DB) return fail('DB_NOT_BOUND', 'D1 数据库未绑定', 500);
-  const auth = await requireAdmin(request, env);
+  const auth = await requireStaff(request, env);
   if (auth.error) return auth.error;
 
   const limit = clampLimit(url.searchParams.get('limit'), 100, 300);
@@ -922,21 +929,28 @@ async function handleDevAuth(request, env) {
 // ---------- 管理员 ----------
 async function handleAdminLogin(request, env) {
   if (!env.SESSION_SECRET) return fail('NO_SESSION_SECRET', '服务端未配置 SESSION_SECRET', 500);
-  if (!env.ADMIN_PASS_HASH) return fail('NO_ADMIN_HASH', '服务端未配置 ADMIN_PASS_HASH', 500);
+  if (!env.ADMIN_PASS_HASH && !env.STAFF_PASS_HASH) return fail('NO_ADMIN_HASH', '服务端未配置管理员密码', 500);
 
   const body = await readJson(request);
   if (!body) return fail('INVALID_BODY', '请求体必须为 JSON');
   const password = String(body.password == null ? '' : body.password);
   if (!password) return fail('INVALID_CREDENTIALS', '请输入管理员密码');
-  if (!(await verifyPassword(password, env.ADMIN_PASS_HASH))) return fail('INVALID_CREDENTIALS', '管理员密码错误', 401);
 
-  const token = await signToken({ s: 'admin', r: 'admin', e: nowSec() + TTL_ADMIN }, env.SESSION_SECRET);
-  return json({ token });
+  // 管理员密码优先；不是管理员再试员工密码（员工不能删账号）
+  if (env.ADMIN_PASS_HASH && (await verifyPassword(password, env.ADMIN_PASS_HASH))) {
+    const token = await signToken({ s: 'admin', r: 'admin', e: nowSec() + TTL_ADMIN }, env.SESSION_SECRET);
+    return json({ token, role: 'admin' });
+  }
+  if (env.STAFF_PASS_HASH && (await verifyPassword(password, env.STAFF_PASS_HASH))) {
+    const token = await signToken({ s: 'staff', r: 'staff', e: nowSec() + TTL_ADMIN }, env.SESSION_SECRET);
+    return json({ token, role: 'staff' });
+  }
+  return fail('INVALID_CREDENTIALS', '密码错误', 401);
 }
 
 async function handleAdminPlayers(url, request, env) {
   if (!env.DB) return fail('DB_NOT_BOUND', 'D1 数据库未绑定', 500);
-  const auth = await requireAdmin(request, env);
+  const auth = await requireStaff(request, env);
   if (auth.error) return auth.error;
 
   const limit = clampLimit(url.searchParams.get('limit'));
@@ -949,8 +963,9 @@ async function handleAdminPlayers(url, request, env) {
 
 async function handleAdminDelete(pid, request, env) {
   if (!env.DB) return fail('DB_NOT_BOUND', 'D1 数据库未绑定', 500);
-  const auth = await requireAdmin(request, env);
+  const auth = await requireStaff(request, env);
   if (auth.error) return auth.error;
+  if (auth.role !== 'admin') return fail('FORBIDDEN', '员工账号无权删除玩家', 403);
   if (!pid || !PID_RE.test(pid)) return fail('INVALID_PID', 'pid 格式非法');
 
   await env.DB.batch([
