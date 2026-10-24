@@ -1090,7 +1090,8 @@
         function initBattle(roleList){
             stopBattle(); initAudio(); battleActive=true; projectiles=[]; particles=[]; smokes=[]; foods=[]; foodTimer=performance.now()+5000; hudSignature='';
             _lastUpdateTs=0;
-            arenaSize=Math.floor(Math.min(window.innerWidth*0.9,380));
+            // 联机固定 360，保证两台设备坐标/碰撞完全一致（否则双方场地尺寸不同会互相错位）
+            arenaSize=gameMode==='online'?360:Math.floor(Math.min(window.innerWidth*0.9,380));
             canvas=document.getElementById('battleCanvas'); canvas.width=arenaSize; canvas.height=arenaSize; ctx=canvas.getContext('2d');
             entities=[];
             roleList.forEach((role,i)=>{
@@ -2064,7 +2065,7 @@
             manualEnt.lastSkillTime=ts;
             if(netGuest){
                 const ang=Math.atan2(fy,fx);
-                netSend({t:'i',m:[joyMove.x,joyMove.y],s:ang,q:++netState.seq});
+                netSendInput({s:ang});
                 try{ sfxShoot(); }catch(e){}
                 // 本地枪口火光：技能判定在房主端，先给即时反馈
                 try{
@@ -2625,6 +2626,7 @@
             onlineStarted=false; onlineEnded=false; onlineHost=false; netGuest=false; remoteEnt=null;
             netPendingOffer=''; netPendingAnswer='';
             _lastGuestTs=0;
+            for(const k in netInputTs) delete netInputTs[k];
             netState={seq:0,lastStateAt:0,lastInputAt:0,lastRecvAt:0,lastDamageAt:0};
         }
 
@@ -2660,7 +2662,17 @@
         function netDcDrop(){
             if(netMode==='p2p'){ try{ if(netDc) netDc.close(); }catch(e){} netDc=null; netMode='relay'; onlineBadge('📡 中继'); onlinePollSet(120); }
         }
-        const NET_ICE={ iceServers:[{urls:['stun:stun.l.google.com:19302','stun:stun1.l.google.com:19302','stun:stun.miwifi.com:3478']}] };
+        function netWatchIce(pc){
+            pc.oniceconnectionstatechange=()=>{
+                const st=pc.iceConnectionState;
+                if(st==='failed'){ netDcDrop(); return; }
+                // disconnected 可能是手机网络瞬断，给 4 秒自愈时间，避免一抖就永久掉到慢速中继
+                if(st==='disconnected') setTimeout(()=>{
+                    if(netPc===pc&&pc.iceConnectionState!=='connected'&&pc.iceConnectionState!=='completed') netDcDrop();
+                },4000);
+            };
+        }
+        const NET_ICE={ iceServers:[{urls:['stun:stun.cloudflare.com:3478','stun:stun.l.google.com:19302','stun:stun1.l.google.com:19302','stun:stun.miwifi.com:3478']}] };
         async function netConnect(){
             netClose();
             onlineBadge('🔗 连接中…');
@@ -2680,7 +2692,7 @@
                 const pc=new RTCPeerConnection(NET_ICE); netPc=pc;
                 // 状态/输入都是"过期即弃"的数据，不开重传，避免丢包时排队阻塞造成越打越卡
                 netSetupDc(pc.createDataChannel('kpdj',{ordered:true,maxRetransmits:0}));
-                pc.oniceconnectionstatechange=()=>{ if(pc.iceConnectionState==='failed'||pc.iceConnectionState==='disconnected') netDcDrop(); };
+                netWatchIce(pc);
                 const offer=await pc.createOffer();
                 await pc.setLocalDescription(offer);
                 await netWaitIce(pc);
@@ -2693,7 +2705,7 @@
             try{
                 const pc=new RTCPeerConnection(NET_ICE); netPc=pc;
                 pc.ondatachannel=ev=>netSetupDc(ev.channel);
-                pc.oniceconnectionstatechange=()=>{ if(pc.iceConnectionState==='failed'||pc.iceConnectionState==='disconnected') netDcDrop(); };
+                netWatchIce(pc);
                 await pc.setRemoteDescription(JSON.parse(payload));
                 const answer=await pc.createAnswer();
                 await pc.setLocalDescription(answer);
@@ -2705,6 +2717,21 @@
         async function netOnAnswer(payload){
             if(!onlineHost||!netPc) return;
             try{ await netPc.setRemoteDescription(JSON.parse(payload)); }catch(e){}
+        }
+        const netInputTs={};
+        function netSendInput(extra){
+            const q=++netState.seq, now=performance.now();
+            netInputTs[q]=now;
+            const keys=Object.keys(netInputTs);
+            if(keys.length>80) for(let i=0;i<keys.length-80;i++) delete netInputTs[keys[i]];
+            netSend(Object.assign({t:'i',m:[joyMove.x,joyMove.y],q},extra||{}));
+        }
+        function netShowLatency(){
+            if(!battleActive||onlineEnded||!netState.rtt) return;
+            const now=performance.now();
+            if(now-(netState.rttAt||0)<600) return;
+            netState.rttAt=now;
+            onlineBadge((netMode==='p2p'?'🌐 直连 · ':'📡 中继 · ')+Math.round(netState.rtt)+'ms');
         }
         function netSend(obj){
             if(!onlineRoomId||!authToken) return;
@@ -2739,6 +2766,7 @@
         function applyGuestInputObject(d){
             if(!d||!onlineHost||!battleActive||!remoteEnt||remoteEnt.hp<=0) return;
             netState.lastInputAt=performance.now();
+            if(d.q) netState.ack=d.q;                  // 回显给客机测延迟
             const m=d.m||[0,0];
             remoteEnt.netMove={x:Number(m[0])||0,y:Number(m[1])||0};
             if(typeof d.s==='number'&&!isNaN(d.s)){
@@ -2754,6 +2782,7 @@
         function serializeNetState(){
             const now=performance.now();
             return {
+                a:netState.ack||0,
                 e:entities.map(e=>({
                     u:e.uid,r:e.role.id,o:e.owner,
                     x:Math.round(e.x*10)/10,y:Math.round(e.y*10)/10,
@@ -2778,6 +2807,10 @@
             if(!d||!d.e||!netGuest||!battleActive) return;
             const now=performance.now();
             netState.lastRecvAt=now;
+            if(d.a&&netInputTs[d.a]){
+                netState.rtt=now-netInputTs[d.a];
+                for(const k in netInputTs){ if(+k<=d.a) delete netInputTs[k]; }
+            }
             const old=entities, used=new Set(), next=[];
             d.e.forEach(sd=>{
                 const role=roleById(sd.r);
@@ -2833,6 +2866,7 @@
                 return {x:pd.x,y:pd.y,vx:pd.vx||0,vy:pd.vy||0,type:pd.t,size:pd.s,color:pd.c,emoji:pd.e||'🚗',born:now,netTX:pd.x,netTY:pd.y,netT:now};
             });
             projectiles.forEach(p=>{ p._used=false; });
+            netShowLatency();
         }
         function onlineHostTick(){
             if(!onlineStarted||!onlineHost||onlineEnded||!battleActive) return;
@@ -2865,7 +2899,7 @@
             const dt=_lastGuestTs?Math.min(3,Math.max(0.25,(ts-_lastGuestTs)/16.6667)):1;
             _lastGuestTs=ts;
             const spd=2.6*dt;
-            if(manualEnt&&manualEnt.hp>0&&!(manualEnt.role.id==='liukun'&&manualEnt.charging)){
+            if(manualEnt&&manualEnt.hp>0&&performance.now()>=manualEnt.frozenUntil&&!(manualEnt.role.id==='liukun'&&manualEnt.charging)){
                 manualEnt.vx=joyMove.x*spd; manualEnt.vy=joyMove.y*spd;
                 manualEnt.x+=manualEnt.vx; manualEnt.y+=manualEnt.vy;
                 const m=15, half=manualEnt.size/2;
@@ -2875,8 +2909,11 @@
                 if(manualEnt.y+half>arenaSize-m) manualEnt.y=arenaSize-m-half;
                 if(manualEnt.netTX!=null){
                     const dx=manualEnt.netTX-manualEnt.x, dy=manualEnt.netTY-manualEnt.y;
-                    if(Math.hypot(dx,dy)>90){ manualEnt.x=manualEnt.netTX; manualEnt.y=manualEnt.netTY; }
-                    else{ const k=Math.min(1,(netMode==='p2p'?0.16:0.32)*dt); manualEnt.x+=dx*k; manualEnt.y+=dy*k; }
+                    const err=Math.hypot(dx,dy);
+                    // 自己是本地权威：房主快照永远比本地慢一个网络延迟，若每帧往快照回拉会把移动"抵消"成原地抖
+                    // 只在误差明显超出延迟正常范围时才硬对齐（被击退/传送），中等误差做极轻微修正
+                    if(err>140){ manualEnt.x=manualEnt.netTX; manualEnt.y=manualEnt.netTY; }
+                    else if(err>90){ const k=Math.min(1,0.08*dt); manualEnt.x+=dx*k; manualEnt.y+=dy*k; }
                 }
             }
             // 远端实体：在最近两个快照之间按时间插值；中继模式快照更稀，缓冲加大并允许外推，避免一跳一跳
@@ -2904,9 +2941,9 @@
                 }
             });
             for(let i=particles.length-1;i>=0;i--){ particles[i].x+=particles[i].vx; particles[i].y+=particles[i].vy; particles[i].life-=16*dt; if(particles[i].life<=0) particles.splice(i,1); }
-            if(now-netState.lastInputAt>=(netMode==='p2p'?50:100)){
+            if(now-netState.lastInputAt>=(netMode==='p2p'?33:100)){
                 netState.lastInputAt=now;
-                netSend({t:'i',m:[joyMove.x,joyMove.y],q:++netState.seq});
+                netSendInput();
             }
             if(manualEnt) updateSkillCooldown(ts);
             if(!onlineEnded&&netState.lastRecvAt&&now-netState.lastRecvAt>15000){
@@ -3274,5 +3311,5 @@
         initJoySettings();
         authInit();
         canvas=document.getElementById('battleCanvas'); ctx=canvas.getContext('2d'); arenaSize=Math.floor(Math.min(window.innerWidth*0.9,380)); canvas.width=arenaSize; canvas.height=arenaSize;
-        window.addEventListener('resize',()=>{ applyJoyLayout(); if(battleActive){ const s=Math.floor(Math.min(window.innerWidth*0.9,380)); if(s!==arenaSize){ const r=s/arenaSize; arenaSize=s; canvas.width=arenaSize; canvas.height=arenaSize; entities.forEach(e=>{e.x*=r;e.y*=r;}); projectiles.forEach(p=>{p.x*=r;p.y*=r;}); } } });
+        window.addEventListener('resize',()=>{ applyJoyLayout(); if(battleActive){ if(gameMode==='online') return; const s=Math.floor(Math.min(window.innerWidth*0.9,380)); if(s!==arenaSize){ const r=s/arenaSize; arenaSize=s; canvas.width=arenaSize; canvas.height=arenaSize; entities.forEach(e=>{e.x*=r;e.y*=r;}); projectiles.forEach(p=>{p.x*=r;p.y*=r;}); } } });
     })();
