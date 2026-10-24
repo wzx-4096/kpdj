@@ -1089,6 +1089,7 @@
         // ============ 战斗初始化 ============
         function initBattle(roleList){
             stopBattle(); initAudio(); battleActive=true; projectiles=[]; particles=[]; smokes=[]; foods=[]; foodTimer=performance.now()+5000; hudSignature='';
+            _lastUpdateTs=0;
             arenaSize=Math.floor(Math.min(window.innerWidth*0.9,380));
             canvas=document.getElementById('battleCanvas'); canvas.width=arenaSize; canvas.height=arenaSize; ctx=canvas.getContext('2d');
             entities=[];
@@ -1328,7 +1329,11 @@
         }
 
         // ============ 逻辑更新 ============
+        let _lastUpdateTs=0;
         function update(ts){
+            // 按真实帧间隔归一化，避免 120Hz 屏幕上手动移动速度翻倍（联机两端口径一致）
+            const dt=_lastUpdateTs?Math.min(3,Math.max(0.25,(ts-_lastUpdateTs)/16.6667)):1;
+            _lastUpdateTs=ts;
             const m=15;
             // 分身逻辑
             for(let i=entities.length-1; i>=0; i--){
@@ -1367,7 +1372,7 @@
                     }
                     if(e.isManual && !(e.role.id==='liukun' && e.charging)){
                         const mv=(e.isRemote&&e.netMove)?e.netMove:joyMove;
-                        e.vx=mv.x*2.6; e.vy=mv.y*2.6;
+                        e.vx=mv.x*2.6*dt; e.vy=mv.y*2.6*dt;
                     }
                     e.x+=e.vx; e.y+=e.vy; let b=false;
                     if(e.role.id==='liukun'){
@@ -2061,6 +2066,11 @@
                 const ang=Math.atan2(fy,fx);
                 netSend({t:'i',m:[joyMove.x,joyMove.y],s:ang,q:++netState.seq});
                 try{ sfxShoot(); }catch(e){}
+                // 本地枪口火光：技能判定在房主端，先给即时反馈
+                try{
+                    const mx=manualEnt.x+Math.cos(ang)*(manualEnt.size*0.6), my=manualEnt.y+Math.sin(ang)*(manualEnt.size*0.6);
+                    spawnParticles(mx,my,manualEnt.role.projectileColor||'#ffffff',6);
+                }catch(e){}
                 return;
             }
             fireSkill(manualEnt, Math.atan2(fy,fx));
@@ -2614,6 +2624,7 @@
         function onlineResetLocal(){
             onlineStarted=false; onlineEnded=false; onlineHost=false; netGuest=false; remoteEnt=null;
             netPendingOffer=''; netPendingAnswer='';
+            _lastGuestTs=0;
             netState={seq:0,lastStateAt:0,lastInputAt:0,lastRecvAt:0,lastDamageAt:0};
         }
 
@@ -2644,13 +2655,13 @@
                 onlinePollSet(2000);
             };
             dc.onmessage=ev=>{ try{ handleNetGame(JSON.parse(ev.data)); }catch(e){} };
-            dc.onclose=()=>{ if(netMode==='p2p'){ netMode='relay'; onlineBadge('📡 中继'); onlinePollSet(160); } };
+            dc.onclose=()=>{ if(netMode==='p2p'){ netMode='relay'; onlineBadge('📡 中继'); onlinePollSet(120); } };
         }
         const NET_ICE={ iceServers:[{urls:['stun:stun.l.google.com:19302','stun:stun1.l.google.com:19302','stun:stun.miwifi.com:3478']}] };
         async function netConnect(){
             netClose();
             onlineBadge('🔗 连接中…');
-            onlinePollStart(160);            // 先走中继，保证一定能打
+            onlinePollStart(120);            // 先走中继，保证一定能打
             if(!netSupported()){ netMode='relay'; onlineBadge('📡 中继'); return; }
             netMode='relay';
             netFallbackTimer=setTimeout(()=>{
@@ -2659,7 +2670,7 @@
                 try{ if(netPc) netPc.close(); }catch(e){}
                 netPc=null; netDc=null; netMode='relay';
                 onlineBadge('📡 中继（自动）');
-                onlinePollSet(160);
+                onlinePollSet(120);
             },8000);
             if(!onlineHost) return;          // 客机等房主的 offer
             try{
@@ -2740,7 +2751,8 @@
                     z:Math.max(0,Math.round(e.frozenUntil-now)),
                     v:Math.max(0,Math.round(e.invincibleUntil-now))
                 })),
-                p:projectiles.map(p=>({x:Math.round(p.x),y:Math.round(p.y),t:p.type,s:p.size,c:p.color,e:p.emoji||''}))
+                p:projectiles.map(p=>({x:Math.round(p.x),y:Math.round(p.y),t:p.type,s:p.size,c:p.color,e:p.emoji||'',
+                    vx:Math.round(p.vx*10)/10,vy:Math.round(p.vy*10)/10}))
             };
         }
         function netMakeEnt(role,owner){
@@ -2748,7 +2760,7 @@
                 lastSkillTime:0,flashTimer:0,frozenUntil:0,lastFrozenTick:0,isEmperor:role.id==='emperor',summoner:null,
                 frozenLabelEl:null,isParent:false,mother:null,parentAtkUntil:0,liukunAtkUntil:0,chargeTimer:0,charging:null,
                 lastSecondTime:0,revived:false,invincibleUntil:0,spawnTimer:0,uid:++uidCounter,hudFillEl:null,hudTextEl:null,
-                isManual:false,isRemote:true,netMove:{x:0,y:0},netTX:null,netTY:null,_hu:0};
+                isManual:false,isRemote:true,netMove:{x:0,y:0},netTX:null,netTY:null,netT:0,netPX:null,netPY:null,netPT:0,_hu:0};
         }
         function netApplyStateObject(d){
             if(!d||!d.e||!netGuest||!battleActive) return;
@@ -2765,8 +2777,14 @@
                 used.add(e);
                 const prevHp=e.hp;
                 e._hu=sd.u;
-                e.netTX=sd.x; e.netTY=sd.y;
-                if(e!==manualEnt&&(Math.abs(e.x-sd.x)>70||Math.abs(e.y-sd.y)>70)){ e.x=sd.x; e.y=sd.y; }
+                // 保留上一帧快照位置，渲染时按时间在两个快照之间插值，彻底消除 16Hz 跳格
+                if(e.netTX!=null&&e.netT){
+                    e.netPX=e.netTX; e.netPY=e.netTY; e.netPT=e.netT;
+                }else{
+                    e.netPX=e.x; e.netPY=e.y; e.netPT=now-50;
+                }
+                e.netTX=sd.x; e.netTY=sd.y; e.netT=now;
+                if(e!==manualEnt&&(Math.abs(e.x-sd.x)>90||Math.abs(e.y-sd.y)>90)){ e.x=sd.x; e.y=sd.y; }
                 e.hp=sd.h; e.maxHp=sd.m;
                 e.flashTimer=sd.f?120:0;
                 e.frozenUntil=sd.z>0?now+sd.z:0;
@@ -2785,7 +2803,24 @@
                 else e.charging=null;
             });
             entities=next;
-            projectiles=(d.p||[]).map(pd=>({x:pd.x,y:pd.y,vx:0,vy:0,type:pd.t,size:pd.s,color:pd.c,emoji:pd.e||'🚗',born:now}));
+            // 投射物：按类型就近复用上一帧对象，保留速度做本地外推，避免每 50ms 瞬移一次
+            const prevP=projectiles;
+            projectiles=(d.p||[]).map(pd=>{
+                let best=null,bd=1e9;
+                for(const o of prevP){
+                    if(o.type!==pd.t||o._used) continue;
+                    const dd=Math.hypot((o.netTX!=null?o.netTX:o.x)-pd.x,(o.netTY!=null?o.netTY:o.y)-pd.y);
+                    if(dd<bd){ bd=dd; best=o; }
+                }
+                if(best&&bd<140){
+                    best._used=true;
+                    best.netTX=pd.x; best.netTY=pd.y; best.netT=now;
+                    best.vx=pd.vx||0; best.vy=pd.vy||0;
+                    return best;
+                }
+                return {x:pd.x,y:pd.y,vx:pd.vx||0,vy:pd.vy||0,type:pd.t,size:pd.s,color:pd.c,emoji:pd.e||'🚗',born:now,netTX:pd.x,netTY:pd.y,netT:now};
+            });
+            projectiles.forEach(p=>{ p._used=false; });
         }
         function onlineHostTick(){
             if(!onlineStarted||!onlineHost||onlineEnded||!battleActive) return;
@@ -2793,7 +2828,7 @@
             if(!netState.lastInputAt) netState.lastInputAt=now;
             if(now-netState.lastInputAt>15000){ onlineEnded=true; onlineAbort('对方已断开连接'); return; }
             if(remoteEnt&&remoteEnt.hp>0&&now-netState.lastInputAt>600){ remoteEnt.netMove={x:0,y:0}; }
-            const iv=netMode==='p2p'?60:150;
+            const iv=netMode==='p2p'?45:120;
             if(now-netState.lastStateAt<iv) return;
             netState.lastStateAt=now;
             netSend({t:'s',d:serializeNetState()});
@@ -2810,12 +2845,16 @@
         }
 
         // ---------- 客机：本地预测 + 快照插值 ----------
+        let _lastGuestTs=0;
         function guestTick(ts){
             if(!battleActive) return;
             animationId=requestAnimationFrame(gameLoop);
             const now=performance.now();
+            const dt=_lastGuestTs?Math.min(3,Math.max(0.25,(ts-_lastGuestTs)/16.6667)):1;
+            _lastGuestTs=ts;
+            const spd=2.6*dt;
             if(manualEnt&&manualEnt.hp>0&&!(manualEnt.role.id==='liukun'&&manualEnt.charging)){
-                manualEnt.vx=joyMove.x*2.6; manualEnt.vy=joyMove.y*2.6;
+                manualEnt.vx=joyMove.x*spd; manualEnt.vy=joyMove.y*spd;
                 manualEnt.x+=manualEnt.vx; manualEnt.y+=manualEnt.vy;
                 const m=15, half=manualEnt.size/2;
                 if(manualEnt.x-half<m) manualEnt.x=m+half;
@@ -2824,16 +2863,35 @@
                 if(manualEnt.y+half>arenaSize-m) manualEnt.y=arenaSize-m-half;
                 if(manualEnt.netTX!=null){
                     const dx=manualEnt.netTX-manualEnt.x, dy=manualEnt.netTY-manualEnt.y;
-                    if(Math.hypot(dx,dy)>70){ manualEnt.x=manualEnt.netTX; manualEnt.y=manualEnt.netTY; }
-                    else{ manualEnt.x+=dx*0.18; manualEnt.y+=dy*0.18; }
+                    if(Math.hypot(dx,dy)>90){ manualEnt.x=manualEnt.netTX; manualEnt.y=manualEnt.netTY; }
+                    else{ const k=Math.min(1,0.16*dt); manualEnt.x+=dx*k; manualEnt.y+=dy*k; }
                 }
             }
+            // 远端实体：在最近两个快照之间按时间插值（延迟约 60ms），画面平滑且不追着抖
+            const rt=now-60;
             entities.forEach(e=>{
                 if(e===manualEnt||e.netTX==null) return;
-                e.x+=(e.netTX-e.x)*0.4; e.y+=(e.netTY-e.y)*0.4;
+                if(e.netPX!=null&&e.netT>e.netPT&&e.netPT>0){
+                    const f=Math.max(0,Math.min(1.2,(rt-e.netPT)/Math.max(1,e.netT-e.netPT)));
+                    e.x=e.netPX+(e.netTX-e.netPX)*f;
+                    e.y=e.netPY+(e.netTY-e.netPY)*f;
+                }else{
+                    const k=Math.min(1,0.4*dt);
+                    e.x+=(e.netTX-e.x)*k; e.y+=(e.netTY-e.y)*k;
+                }
             });
-            for(let i=particles.length-1;i>=0;i--){ particles[i].x+=particles[i].vx; particles[i].y+=particles[i].vy; particles[i].life-=16; if(particles[i].life<=0) particles.splice(i,1); }
-            if(now-netState.lastInputAt>=110){
+            // 投射物：用快照速度本地外推 + 轻微回拉，消除 20Hz 瞬移
+            projectiles.forEach(p=>{
+                p.x+=p.vx*dt; p.y+=p.vy*dt;
+                if(p.netTX!=null){
+                    const age=Math.min(3,(now-p.netT)/16.6667);
+                    const tx=p.netTX+p.vx*age, ty=p.netTY+p.vy*age;
+                    const k=Math.min(1,0.25*dt);
+                    p.x+=(tx-p.x)*k; p.y+=(ty-p.y)*k;
+                }
+            });
+            for(let i=particles.length-1;i>=0;i--){ particles[i].x+=particles[i].vx; particles[i].y+=particles[i].vy; particles[i].life-=16*dt; if(particles[i].life<=0) particles.splice(i,1); }
+            if(now-netState.lastInputAt>=(netMode==='p2p'?50:100)){
                 netState.lastInputAt=now;
                 netSend({t:'i',m:[joyMove.x,joyMove.y],q:++netState.seq});
             }
@@ -3024,6 +3082,7 @@
             gameMode='online';
             showVSIntro([hr,gr],()=>{
                 initBattle([hr,gr]);
+                _lastGuestTs=0;
                 netState.lastRecvAt=performance.now();
                 netState.lastInputAt=performance.now();
                 netState.lastStateAt=0; netState.seq=0;
@@ -3054,7 +3113,6 @@
         function roomLost(){ if(!onlineClosing) onlineAbort('房间已解散或你已不在房间中'); }
         function opponentLeft(){ if(!onlineEnded&&!onlineClosing){ onlineEnded=true; onlineAbort('对方已离开房间'); } }
 
-        document.getElementById('btnOnline').addEventListener('click',()=>{ sfxClick(); roomsResume(); });
         document.getElementById('btnRoomCreate').addEventListener('click',()=>{ sfxClick(); roomCreate(); });
         document.getElementById('btnRoomLeave').addEventListener('click',()=>{ sfxClick(); roomLeave(); });
         document.getElementById('btnRoomCopy').addEventListener('click',roomCopy);
@@ -3089,7 +3147,7 @@
         document.getElementById('btnAsSavePass').addEventListener('click',asSavePassword);
         document.getElementById('btnAsLogout').addEventListener('click',()=>{ sfxClick(); authSave('',null); friendsCache={friends:[],incoming:[],outgoing:[],unread:{total:0,by:{}}}; showScreen(document.getElementById('screenMenu')); });
         document.getElementById('asNickname').addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); asSaveNickname(); } });
-        document.getElementById('btnFriends').addEventListener('click',()=>{ sfxClick(); friendsOpen(); });
+        document.getElementById('btnFriends').addEventListener('click',()=>{ sfxClick(); roomsResume(); });
         document.getElementById('btnFriendsBack').addEventListener('click',()=>{ sfxClick(); showScreen(document.getElementById('screenMenu')); });
         document.getElementById('btnFrTabList').addEventListener('click',()=>{ sfxClick(); friendsSetTab('list'); });
         document.getElementById('btnFrTabReq').addEventListener('click',()=>{ sfxClick(); friendsSetTab('req'); friendsLoad().catch(()=>{}); });
