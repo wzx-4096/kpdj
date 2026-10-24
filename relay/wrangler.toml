@@ -1,0 +1,16 @@
+# ============ 联机中继 Worker（WebSocket + Durable Object） ============
+# 每个房间一个 Durable Object，收到消息直接转给另一端，延迟通常 30-80ms
+name = "kpdj-relay"
+main = "src/index.js"
+compatibility_date = "2026-10-23"
+
+[durable_objects]
+bindings = [{ name = "ROOMS", class_name = "RoomRelay" }]
+
+# SQLite 存储版 Durable Object（免费版即可用）
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["RoomRelay"]
+
+# 密钥不写在这里，用命令设置：
+#   npx wrangler secret put RELAY_SECRET

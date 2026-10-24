@@ -22,10 +22,11 @@
 //   POST   /api/rooms/leave
 //   POST   /api/rooms/signal    { kind, payload }
 //   POST   /api/rooms/msg       { kind, payload }
+//   POST   /api/rooms/ticket    （签发 WebSocket 中继票据，返回 { ticket, url }）
 //   POST   /api/admin/login     { password }
 //   GET    /api/admin/players   （Bearer 管理员 token）
 //   DELETE /api/admin/players/:pid（Bearer 管理员 token）
-// 环境变量/绑定：DB（D1）、SESSION_SECRET、ADMIN_PASS_HASH
+// 环境变量/绑定：DB（D1）、SESSION_SECRET、ADMIN_PASS_HASH、RELAY_SECRET、RELAY_URL
 // 密码只存 PBKDF2-SHA256 哈希（pbkdf2$迭代数$盐$哈希），不存明文。
 
 const PBKDF2_ITER = 12000;                                  // Workers 免费版单次 10ms CPU，迭代数不能太高
@@ -708,6 +709,50 @@ async function handleRoomMsg(request, env) {
   return json({ ok: true });
 }
 
+// ---------- WebSocket 中继代理 ----------
+// workers.dev 在部分网络不可达，客户端统一连本站 /api/relay/room/<房间码>，
+// 由 Pages Function 在 Cloudflare 内网转发给中继 Worker，公网只暴露 pages.dev 域名。
+const RELAY_ORIGIN = 'https://kpdj-relay.2156066208.workers.dev';
+function relayWsBase(request) {
+  const u = new URL(request.url);
+  return (u.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + u.host + '/api/relay';
+}
+async function handleRelayProxy(request) {
+  const url = new URL(request.url);
+  const target = new URL(RELAY_ORIGIN);
+  target.pathname = url.pathname.replace(/^\/api\/relay/, '') || '/';
+  target.search = url.search;
+  const headers = new Headers(request.headers);
+  headers.delete('host');
+  return fetch(target.toString(), { method: 'GET', headers });
+}
+
+// 弱网时客户端可能重复申请票据，这里只做限频，避免刷爆签名接口
+const ticketHits = new Map();
+function ticketLimited(pid) {
+  const now = Date.now();
+  const rec = ticketHits.get(pid);
+  if (rec && now - rec.t < 1000) { rec.n++; if (rec.n > 8) return true; }
+  else ticketHits.set(pid, { t: now, n: 1 });
+  if (ticketHits.size > 5000) ticketHits.clear();
+  return false;
+}
+
+// WebSocket 中继票据：证明"你是这个房间的成员"，5 分钟内有效。
+// 中继 Worker 用同一个 RELAY_SECRET 校验，不需要再查 D1，因此中继转发零数据库开销。
+async function handleRoomTicket(request, env) {
+  const auth = await requirePlayer(request, env);
+  if (auth.error) return auth.error;
+  const room = await activeRoomOf(env, auth.user.pid);
+  if (!room) return fail('ROOM_NOT_FOUND', '你不在任何房间中', 404);
+  if (!room.guest_pid) return fail('ROOM_NOT_READY', '对方还没有加入房间', 409);
+  if (!env.RELAY_SECRET) return fail('NO_RELAY_SECRET', '服务端未配置 RELAY_SECRET', 500);
+  if (ticketLimited(auth.user.pid)) return fail('TOO_MANY', '请求太频繁，请稍后再试', 429);
+
+  const ticket = await signToken({ s: auth.user.pid, r: room.id, e: nowSec() + 300 }, env.RELAY_SECRET);
+  return json({ ticket, url: relayWsBase(request) });
+}
+
 // ---------- 管理员 ----------
 async function handleAdminLogin(request, env) {
   if (!env.SESSION_SECRET) return fail('NO_SESSION_SECRET', '服务端未配置 SESSION_SECRET', 500);
@@ -798,6 +843,8 @@ export async function onRequest(context) {
   try {
     if (method === 'OPTIONS') return new Response(null, { status: 204 });
 
+    if (path.startsWith('/api/relay/')) return handleRelayProxy(request);
+
     if (path === '/api/health' && method === 'GET') return handleHealth(env);
     if (path === '/api/auth/register' && method === 'POST') return handleRegister(request, env);
     if (path === '/api/auth/login' && method === 'POST') return handleLogin(request, env);
@@ -819,6 +866,7 @@ export async function onRequest(context) {
     if (path === '/api/rooms/leave' && method === 'POST') return handleRoomLeave(request, env);
     if (path === '/api/rooms/signal' && method === 'POST') return handleRoomSignal(request, env);
     if (path === '/api/rooms/msg' && method === 'POST') return handleRoomMsg(request, env);
+    if (path === '/api/rooms/ticket' && method === 'POST') return handleRoomTicket(request, env);
     if (path === '/api/admin/login' && method === 'POST') return handleAdminLogin(request, env);
     if (path === '/api/admin/players' && method === 'GET') return handleAdminPlayers(url, request, env);
     if (path === '/api/admin/migrate' && method === 'POST') return handleAdminMigrate(request, env);

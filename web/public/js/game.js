@@ -2603,6 +2603,7 @@
         let netGuest=false, remoteEnt=null, netPendingOffer='', netPendingAnswer='';
         let onlinePollTimer=null, onlinePollAfter=0, onlinePollMs=800, onlinePolling=false, onlineClosing=false;
         let netPc=null, netDc=null, netMode='', netFallbackTimer=null;
+        let netWs=null, netWsReady=false, netWsTimer=null, netWsRetry=0;
         let netState={seq:0,lastStateAt:0,lastInputAt:0,lastRecvAt:0,lastDamageAt:0};
 
         function roleById(id){
@@ -2630,12 +2631,54 @@
             netState={seq:0,lastStateAt:0,lastInputAt:0,lastRecvAt:0,lastDamageAt:0};
         }
 
-        // ---------- 网络通道 ----------
+        // ---------- 网络通道（P2P 直连 → WebSocket 中继 → 数据库轮询） ----------
         function netClose(){
             if(netFallbackTimer){ clearTimeout(netFallbackTimer); netFallbackTimer=null; }
+            if(netWsTimer){ clearTimeout(netWsTimer); netWsTimer=null; }
+            if(netWs){ const w=netWs; netWs=null; try{ w.onclose=null; w.close(); }catch(e){} }
+            netWsReady=false; netWsRetry=0;
             try{ if(netDc) netDc.close(); }catch(e){}
             try{ if(netPc) netPc.close(); }catch(e){}
             netDc=null; netPc=null; netMode=''; onlineBadge('');
+        }
+        function netSlowLabel(){ return netWsReady?'⚡ 中继':'📡 数据库'; }
+        function netSyncBadge(){
+            onlineBadge(netMode==='p2p'?'🌐 直连':netSlowLabel());
+            onlinePollSet(netMode==='p2p'?2000:(netWsReady?1500:120));
+        }
+        // WebSocket 中继：向 Pages 申请一次性票据，连上后消息不再经过数据库
+        function netRelayConnect(){
+            if(!onlineStarted||onlineEnded||!onlineRoomId||!authToken) return;
+            authApi('/rooms/ticket',{method:'POST'}).then(d=>{
+                if(!onlineStarted||onlineEnded||!onlineRoomId||netWs) return;
+                const base=String((d&&d.url)||'').replace(/^http/i,'ws').replace(/\/+$/,'');
+                if(!base||!d.ticket){ netRelayRetry(); return; }
+                let ws;
+                try{ ws=new WebSocket(base+'/room/'+encodeURIComponent(onlineRoomId)+'?ticket='+encodeURIComponent(d.ticket)); }
+                catch(e){ netRelayRetry(); return; }
+                netWs=ws;
+                ws.onopen=()=>{
+                    if(netWs!==ws) return;
+                    netWsReady=true; netWsRetry=0;
+                    if(netMode!=='p2p') netSyncBadge();
+                };
+                ws.onmessage=ev=>{ if(netWs!==ws) return; try{ const m=JSON.parse(ev.data); if(m&&m.t) handleNetGame(m); }catch(e){} };
+                ws.onclose=()=>{
+                    if(netWs!==ws) return;
+                    netWs=null; netWsReady=false;
+                    if(!onlineStarted||onlineEnded) return;
+                    netSyncBadge();
+                    netRelayRetry();
+                };
+                ws.onerror=()=>{ try{ ws.close(); }catch(e){} };
+            }).catch(()=>{ netRelayRetry(); });
+        }
+        function netRelayRetry(){
+            if(!onlineStarted||onlineEnded||!onlineRoomId||!authToken) return;
+            if(netWsTimer||netWsReady||netWs) return;
+            if(netWsRetry>=8) return;        // 中继长期不可用：稳定走数据库轮询，不再反复请求
+            netWsRetry++;
+            netWsTimer=setTimeout(()=>{ netWsTimer=null; netRelayConnect(); },Math.min(5000,600*netWsRetry));
         }
         function netSupported(){ return typeof RTCPeerConnection!=='undefined'; }
         function netWaitIce(pc){
@@ -2652,15 +2695,18 @@
             netDc=dc;
             dc.onopen=()=>{
                 netMode='p2p';
-                onlineBadge('🌐 直连');
                 if(netFallbackTimer){ clearTimeout(netFallbackTimer); netFallbackTimer=null; }
-                onlinePollSet(2000);
+                netSyncBadge();
             };
             dc.onmessage=ev=>{ try{ handleNetGame(JSON.parse(ev.data)); }catch(e){} };
-            dc.onclose=()=>{ if(netMode==='p2p'){ netMode='relay'; onlineBadge('📡 中继'); onlinePollSet(120); } };
+            dc.onclose=()=>{ netDcDrop(); };
         }
         function netDcDrop(){
-            if(netMode==='p2p'){ try{ if(netDc) netDc.close(); }catch(e){} netDc=null; netMode='relay'; onlineBadge('📡 中继'); onlinePollSet(120); }
+            if(netMode!=='p2p') return;
+            try{ if(netDc) netDc.close(); }catch(e){}
+            netDc=null; netMode='relay';
+            netSyncBadge();
+            if(!netWsReady) netRelayRetry();
         }
         function netWatchIce(pc){
             pc.oniceconnectionstatechange=()=>{
@@ -2676,16 +2722,16 @@
         async function netConnect(){
             netClose();
             onlineBadge('🔗 连接中…');
-            onlinePollStart(120);            // 先走中继，保证一定能打
-            if(!netSupported()){ netMode='relay'; onlineBadge('📡 中继'); return; }
+            onlinePollStart(120);            // 数据库轮询先兜底，保证一定能打
+            netRelayConnect();               // 同时建立 WebSocket 中继（通常 200ms 内可用）
+            if(!netSupported()){ netMode='relay'; netSyncBadge(); return; }
             netMode='relay';
             netFallbackTimer=setTimeout(()=>{
                 netFallbackTimer=null;
                 if(netMode==='p2p') return;
                 try{ if(netPc) netPc.close(); }catch(e){}
                 netPc=null; netDc=null; netMode='relay';
-                onlineBadge('📡 中继（自动）');
-                onlinePollSet(120);
+                netSyncBadge();
             },8000);
             if(!onlineHost) return;          // 客机等房主的 offer
             try{
@@ -2698,7 +2744,7 @@
                 await netWaitIce(pc);
                 if(netPc!==pc) return;
                 await authApi('/rooms/signal',{method:'POST',body:{kind:'offer',payload:JSON.stringify(pc.localDescription)}});
-            }catch(e){ if(netMode!=='p2p'){ netMode='relay'; onlineBadge('📡 中继'); } }
+            }catch(e){ if(netMode!=='p2p') netSyncBadge(); }
         }
         async function netOnOffer(payload){
             if(!onlineStarted||onlineHost||netPc) return;
@@ -2731,7 +2777,7 @@
             const now=performance.now();
             if(now-(netState.rttAt||0)<600) return;
             netState.rttAt=now;
-            onlineBadge((netMode==='p2p'?'🌐 直连 · ':'📡 中继 · ')+Math.round(netState.rtt)+'ms');
+            onlineBadge((netMode==='p2p'?'🌐 直连':netSlowLabel())+' · '+Math.round(netState.rtt)+'ms');
         }
         function netSend(obj){
             if(!onlineRoomId||!authToken) return;
@@ -2744,6 +2790,10 @@
                 if(kind!=='end'&&netDc.bufferedAmount>8192) return;
                 try{ netDc.send(s); return; }catch(e){}
             }
+            if(netWsReady&&netWs&&netWs.readyState===1){
+                if(kind!=='end'&&netWs.bufferedAmount>16384) return;
+                try{ netWs.send(s); return; }catch(e){}
+            }
             if(kind==='end') return;
             authApi('/rooms/msg',{method:'POST',body:{kind,payload:s}}).catch(()=>{});
         }
@@ -2753,13 +2803,14 @@
             else if(m.t==='i'){ if(onlineHost) applyGuestInputObject(m); }
             else if(m.t==='e'){ if(!onlineHost) guestFinish(m.w||''); }
         }
-        function handleRoomMessage(kind,payload){
+        function handleRoomMessage(kind,payload,viaPoll){
             if(kind==='offer'){ if(onlineHost) return; if(!onlineStarted){ netPendingOffer=payload; return; } netOnOffer(payload); return; }
             if(kind==='answer'){ if(!onlineHost) return; if(!onlineStarted){ netPendingAnswer=payload; return; } netOnAnswer(payload); return; }
             if(!onlineStarted||!payload) return;
             try{
-                if(kind==='input'){ if(onlineHost) applyGuestInputObject(JSON.parse(payload)); }
-                else if(kind==='state'){ if(!onlineHost) netApplyStateObject((JSON.parse(payload)||{}).d); }
+                // WebSocket 中继已通时，数据库里的旧输入/快照直接丢弃，避免两路数据互相打断插值
+                if(kind==='input'){ if(onlineHost&&!(viaPoll&&netWsReady)) applyGuestInputObject(JSON.parse(payload)); }
+                else if(kind==='state'){ if(!onlineHost&&!(viaPoll&&netWsReady)) netApplyStateObject((JSON.parse(payload)||{}).d); }
                 else if(kind==='end'){ if(!onlineHost) guestFinish((JSON.parse(payload)||{}).w||''); }
             }catch(e){}
         }
@@ -2874,7 +2925,7 @@
             if(!netState.lastInputAt) netState.lastInputAt=now;
             if(now-netState.lastInputAt>15000){ onlineEnded=true; onlineAbort('对方已断开连接'); return; }
             if(remoteEnt&&remoteEnt.hp>0&&now-netState.lastInputAt>600){ remoteEnt.netMove={x:0,y:0}; }
-            const iv=netMode==='p2p'?45:120;
+            const iv=netMode==='p2p'?45:(netWsReady?50:120);
             if(now-netState.lastStateAt<iv) return;
             netState.lastStateAt=now;
             netSend({t:'s',d:serializeNetState()});
@@ -2918,7 +2969,7 @@
             }
             // 远端实体：在最近两个快照之间按时间插值；中继模式快照更稀，缓冲加大并允许外推，避免一跳一跳
             const p2p=netMode==='p2p';
-            const rt=now-(p2p?60:150);
+            const rt=now-(p2p?60:(netWsReady?80:150));
             entities.forEach(e=>{
                 if(e===manualEnt||e.netTX==null) return;
                 if(e.netPX!=null&&e.netT>e.netPT&&e.netPT>0){
@@ -2941,7 +2992,7 @@
                 }
             });
             for(let i=particles.length-1;i>=0;i--){ particles[i].x+=particles[i].vx; particles[i].y+=particles[i].vy; particles[i].life-=16*dt; if(particles[i].life<=0) particles.splice(i,1); }
-            if(now-netState.lastInputAt>=(netMode==='p2p'?33:100)){
+            if(now-netState.lastInputAt>=(netMode==='p2p'?33:(netWsReady?50:100))){
                 netState.lastInputAt=now;
                 netSendInput();
             }
@@ -3106,9 +3157,9 @@
                     if(m.id>onlinePollAfter) onlinePollAfter=m.id;
                     if(m.from_pid===authUser.pid) return;
                     if(m.kind==='state'){ lastState=m.payload; return; }
-                    handleRoomMessage(m.kind,m.payload);
+                    handleRoomMessage(m.kind,m.payload,true);
                 });
-                if(lastState&&netGuest&&battleActive){ try{ netApplyStateObject((JSON.parse(lastState)||{}).d); }catch(e){} }
+                if(lastState&&netGuest&&battleActive&&!netWsReady){ try{ netApplyStateObject((JSON.parse(lastState)||{}).d); }catch(e){} }
                 if(onlineStarted){
                     if(d.room.status!=='battle'&&!onlineEnded) opponentLeft();
                 }else if(d.room.status==='battle'){
