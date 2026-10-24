@@ -2676,9 +2676,8 @@
         function netRelayRetry(){
             if(!onlineStarted||onlineEnded||!onlineRoomId||!authToken) return;
             if(netWsTimer||netWsReady||netWs) return;
-            if(netWsRetry>=8) return;        // 中继长期不可用：稳定走数据库轮询，不再反复请求
-            netWsRetry++;
-            netWsTimer=setTimeout(()=>{ netWsTimer=null; netRelayConnect(); },Math.min(5000,600*netWsRetry));
+            netWsRetry++;                    // 不设上限：中继恢复后自动切回 ⚡，期间数据库轮询兜底
+            netWsTimer=setTimeout(()=>{ netWsTimer=null; netRelayConnect(); },Math.min(8000,600*netWsRetry));
         }
         function netSupported(){ return typeof RTCPeerConnection!=='undefined'; }
         function netWaitIce(pc){
@@ -2721,11 +2720,11 @@
         const NET_ICE={ iceServers:[{urls:['stun:stun.cloudflare.com:3478','stun:stun.l.google.com:19302','stun:stun1.l.google.com:19302','stun:stun.miwifi.com:3478']}] };
         async function netConnect(){
             netClose();
-            onlineBadge('🔗 连接中…');
+            netMode='relay';
+            netSyncBadge();                  // 先显示真实通道（📡 数据库 → WS 通了变 ⚡ 中继）
             onlinePollStart(120);            // 数据库轮询先兜底，保证一定能打
             netRelayConnect();               // 同时建立 WebSocket 中继（通常 200ms 内可用）
-            if(!netSupported()){ netMode='relay'; netSyncBadge(); return; }
-            netMode='relay';
+            if(!netSupported()) return;
             netFallbackTimer=setTimeout(()=>{
                 netFallbackTimer=null;
                 if(netMode==='p2p') return;
@@ -3139,12 +3138,19 @@
         }
         function onlinePollStop(){ if(onlinePollTimer){ clearInterval(onlinePollTimer); onlinePollTimer=null; } }
         function onlinePollSet(ms){ if(!onlinePollTimer||onlinePollMs===ms) return; onlinePollStart(ms); }
+        // 轮询请求加超时：手机网络瞬断时 fetch 可能长时间挂起，卡住 onlinePolling 会让整局再无消息
+        function pollFetch(path,ms){
+            return new Promise((resolve,reject)=>{
+                const t=setTimeout(()=>reject(new Error('poll timeout')),ms||7000);
+                authApi(path).then(d=>{ clearTimeout(t); resolve(d); },e=>{ clearTimeout(t); reject(e); });
+            });
+        }
         async function onlinePollOnce(){
             if(!authUser||onlinePolling) return;
             if(!onlineRoomId&&!onlineScreenActive()) return;
             onlinePolling=true;
             try{
-                const d=await authApi('/rooms/poll?after='+onlinePollAfter);
+                const d=await pollFetch('/rooms/poll?after='+onlinePollAfter);
                 if(!onlineRoomId) return;
                 if(!d.room){
                     if(onlineStarted&&!battleActive){ onlinePollStop(); return; }
