@@ -2604,6 +2604,11 @@
         let onlinePollTimer=null, onlinePollAfter=0, onlinePollMs=800, onlinePolling=false, onlineClosing=false;
         let netPc=null, netDc=null, netMode='', netFallbackTimer=null;
         let netWs=null, netWsReady=false, netWsTimer=null, netWsRetry=0, netPingTimer=null, netPingSeq=0;
+        // TRTC 通道（腾讯云自定义消息）：国内移动网络下比 Cloudflare 长连接稳，作为中继之上的快通道
+        let netTrtcSdk=null, netTrtcSdkLoading=null, netTrtc=null, netTrtcReady=false, netTrtcConnecting=false;
+        let netTrtcTimer=null, netTrtcPingTimer=null, netTrtcRetry=0, netTrtcOff=false, netTrtcPingAt=0;
+        let netTrtcState={readyAt:0,pongAt:0,rtt:0,pseq:0,recvAt:0};
+        const NET_TRTC_CMD=2, NET_TRTC_PING=1, NET_TRTC_PONG=2, NET_TRTC_DATA=16, NET_TRTC_DATA_GZ=17;
         let netState={seq:0,lastStateAt:0,lastInputAt:0,lastRecvAt:0,lastDamageAt:0,lastRelayAt:0,wsRtt:0,wsPongAt:0,wsReadyAt:0,lastSq:0,lastGuestQ:0,sseq:0};
 
         function roleById(id){
@@ -2633,6 +2638,7 @@
 
         // ---------- 网络通道（P2P 直连 → WebSocket 中继 → 数据库轮询） ----------
         function netClose(){
+            netTrtcClose();
             if(netFallbackTimer){ clearTimeout(netFallbackTimer); netFallbackTimer=null; }
             if(netWsTimer){ clearTimeout(netWsTimer); netWsTimer=null; }
             if(netPingTimer){ clearInterval(netPingTimer); netPingTimer=null; }
@@ -2642,7 +2648,7 @@
             try{ if(netPc) netPc.close(); }catch(e){}
             netDc=null; netPc=null; netMode=''; onlineBadge('');
         }
-        function netSlowLabel(){ return netWsHealthy()?'⚡ 中继':'📡 数据库'; }
+        function netSlowLabel(){ return netTrtcHealthy()?'⚡ TRTC':(netWsHealthy()?'⚡ 中继':'📡 数据库'); }
         // 中继健康：WebSocket 开着、1 秒一次的回执最近有回应、且实测往返 <400ms。
         // 国内移动网络到 Cloudflare 的长连接经常被丢包堵死（实测 0.5s~9s），这种链路必须主动放弃，
         // 否则会一直卡在 3 秒延迟；回执只用来测健康，不携带游戏数据。
@@ -2661,12 +2667,14 @@
         function netSyncBadge(){
             if(netMode==='p2p'){
                 onlineBadge('🌐 直连'+(netState.rtt?' · '+Math.round(netState.rtt)+'ms':''));
+            }else if(netTrtcHealthy()){
+                onlineBadge('⚡ TRTC'+(netTrtcState.rtt?' · '+Math.round(netTrtcState.rtt)+'ms':''));
             }else if(netWsHealthy()){
                 onlineBadge('⚡ 中继'+(netState.wsRtt?' · '+Math.round(netState.wsRtt)+'ms':''));
             }else{
                 onlineBadge('📡 数据库');
             }
-            onlinePollSet(netMode==='p2p'?2000:(netRelayActive()?1500:120));
+            onlinePollSet(netMode==='p2p'?2000:((netTrtcActive()||netRelayActive())?1500:120));
         }
         // 每秒发一次中继探测：既测链路健康，也用于发现"连接还在但数据全被堵住"的假在线
         function netPingStart(){
@@ -2732,6 +2740,156 @@
             netWsRetry++;                    // 不设上限：中继恢复后自动切回 ⚡，期间数据库轮询兜底
             netWsTimer=setTimeout(()=>{ netWsTimer=null; netRelayConnect(); },Math.min(8000,600*netWsRetry));
         }
+
+        // ---------- TRTC 快通道（腾讯云实时音视频自定义消息） ----------
+        // 国内到 Cloudflare 的长连接实测中位 1.7 秒、5/30 次超时，TRTC 走腾讯云内网中转，延迟稳定得多。
+        // 限制：单包 1KB、30 条/秒、共 8KB/s，所以超大的包直接让给中继/数据库；它只负责"更快"，不承担兜底。
+        function netTrtcLoad(){
+            if(netTrtcSdk) return Promise.resolve(netTrtcSdk);
+            if(window.TRTC){ netTrtcSdk=window.TRTC; return Promise.resolve(netTrtcSdk); }
+            if(netTrtcSdkLoading) return netTrtcSdkLoading;
+            netTrtcSdkLoading=new Promise((res,rej)=>{
+                const s=document.createElement('script');
+                s.src='./vendor/trtc.js'; s.async=true;
+                s.onload=()=>{ if(window.TRTC){ netTrtcSdk=window.TRTC; res(netTrtcSdk); } else rej(new Error('TRTC 未定义')); };
+                s.onerror=()=>rej(new Error('TRTC 加载失败'));
+                document.head.appendChild(s);
+            }).catch(()=>{ netTrtcSdkLoading=null; return null; });
+            return netTrtcSdkLoading;
+        }
+        // 健康：1 秒一次回执、6 秒内有回应、往返 <400ms。和中继同一套阈值，避免"看着是快通道实际更慢"
+        function netTrtcHealthy(){
+            if(!netTrtcReady||!netTrtc) return false;
+            const now=performance.now();
+            if(!netTrtcState.pongAt) return now-(netTrtcState.readyAt||now)<4000;
+            if(now-netTrtcState.pongAt>6000) return false;
+            return (netTrtcState.rtt||0)<400;
+        }
+        // 双向可用：自己健康 且 最近 4 秒收到过对端经 TRTC 发来的消息
+        function netTrtcActive(){
+            return !!(netTrtcHealthy()&&performance.now()-(netTrtcState.recvAt||0)<4000);
+        }
+        function netTrtcClose(){
+            if(netTrtcTimer){ clearTimeout(netTrtcTimer); netTrtcTimer=null; }
+            if(netTrtcPingTimer){ clearInterval(netTrtcPingTimer); netTrtcPingTimer=null; }
+            const t=netTrtc; netTrtc=null; netTrtcReady=false; netTrtcConnecting=false; netTrtcRetry=0;
+            netTrtcState.pongAt=0; netTrtcState.rtt=0; netTrtcState.recvAt=0;
+            if(t){ try{ t.exitRoom(); }catch(e){} try{ t.destroy(); }catch(e){} }
+        }
+        function netTrtcSendRaw(u8){
+            if(!netTrtcReady||!netTrtc) return false;
+            try{ netTrtc.sendCustomMessage({cmdId:NET_TRTC_CMD,data:u8.buffer}); return true; }
+            catch(e){ return false; }
+        }
+        function netTrtcSendFrame(type,bytes){
+            const buf=new Uint8Array(bytes.length+1);
+            buf[0]=type; buf.set(bytes,1);
+            return netTrtcSendRaw(buf);
+        }
+        // 0=装不下（交给中继/数据库） 1=已发出 2=大包异步压缩中（压不进 1KB / 浏览器不支持时内部回落数据库）
+        function netTrtcSend(text,kind){
+            if(!netTrtcHealthy()) return 0;
+            const bytes=new TextEncoder().encode(text);
+            if(bytes.length<=1000){ netTrtcSendFrame(NET_TRTC_DATA,bytes); return 1; }
+            if(typeof CompressionStream==='undefined'||typeof DecompressionStream==='undefined'){ netDbFallback(text,kind); return 2; }
+            new Response(new Blob([bytes]).stream().pipeThrough(new CompressionStream('deflate-raw')))
+                .arrayBuffer().then(b=>{
+                    const z=new Uint8Array(b);
+                    if(z.length<=1020&&netTrtcHealthy()){ netTrtcSendFrame(NET_TRTC_DATA_GZ,z); return; }
+                    netDbFallback(text,kind);                 // 压缩后仍超限：慢速兜底，不能让快照悄悄断流
+                }).catch(()=>netDbFallback(text,kind));
+            return 2;
+        }
+        function netDbFallback(text,kind){
+            if(!onlineRoomId||!authToken||onlineEnded) return;
+            authApi('/rooms/msg',{method:'POST',body:{kind,payload:text}}).catch(()=>{});
+        }
+        function netTrtcUnzip(bytes){
+            if(typeof DecompressionStream==='undefined') return;
+            new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw')))
+                .arrayBuffer()
+                .then(b=>{ try{ handleNetGame(JSON.parse(new TextDecoder().decode(b))); }catch(e){} })
+                .catch(()=>{});
+        }
+        function netTrtcReceive(ev){
+            if(!ev||!ev.data||!onlineStarted||onlineEnded) return;
+            let u8; try{ u8=new Uint8Array(ev.data); }catch(e){ return; }
+            if(!u8.length) return;
+            netTrtcState.recvAt=performance.now();
+            const type=u8[0];
+            if(type===NET_TRTC_PING){ netTrtcSendRaw(new Uint8Array([NET_TRTC_PONG,u8[1]||0,u8[2]||0])); return; }
+            if(type===NET_TRTC_PONG){
+                const p=netTrtcState.pseq;
+                if((u8[1]||0)===(p&255)&&(u8[2]||0)===((p>>8)&255)&&netTrtcPingAt){
+                    netTrtcState.rtt=performance.now()-netTrtcPingAt;
+                    netTrtcState.pongAt=performance.now();
+                    if(netMode!=='p2p') netSyncBadge();
+                }
+                return;
+            }
+            if(type===NET_TRTC_DATA_GZ){ netTrtcUnzip(u8.subarray(1)); return; }
+            if(type!==NET_TRTC_DATA) return;
+            try{ handleNetGame(JSON.parse(new TextDecoder().decode(u8.subarray(1)))); }catch(e){}
+        }
+        function netTrtcPingStart(){
+            if(netTrtcPingTimer) return;
+            netTrtcPingTimer=setInterval(()=>{
+                if(!onlineStarted||onlineEnded||!netTrtcReady||!netTrtc) return;
+                const now=performance.now();
+                netTrtcState.pseq=(netTrtcState.pseq+1)&0xffff;
+                netTrtcPingAt=now;
+                netTrtcSendRaw(new Uint8Array([NET_TRTC_PING,netTrtcState.pseq&255,(netTrtcState.pseq>>8)&255]));
+                if(netMode!=='p2p') netSyncBadge();
+                const last=netTrtcState.pongAt||netTrtcState.readyAt||0;
+                if(last&&now-last>12000) netTrtcDrop(false);      // 12 秒无回执：通道已被堵死，重进房间
+            },1000);
+        }
+        function netTrtcDrop(kicked){
+            if(netTrtcPingTimer){ clearInterval(netTrtcPingTimer); netTrtcPingTimer=null; }
+            const t=netTrtc; netTrtc=null; netTrtcReady=false;
+            netTrtcState.pongAt=0; netTrtcState.rtt=0;
+            if(t){ try{ t.exitRoom(); }catch(e){} try{ t.destroy(); }catch(e){} }
+            if(!onlineStarted||onlineEnded) return;
+            if(kicked) netTrtcOff=true;                          // 被顶号：本局不再连
+            netSyncBadge();
+            if(!kicked) netTrtcSchedule();
+        }
+        function netTrtcSchedule(){
+            if(!onlineStarted||onlineEnded||netTrtcOff||netTrtc||netTrtcConnecting||netTrtcTimer) return;
+            netTrtcRetry++;                                      // 不设上限：通了自动切回 ⚡ TRTC，期间中继/数据库兜底
+            netTrtcTimer=setTimeout(()=>{ netTrtcTimer=null; netTrtcConnect(); },Math.min(15000,800*netTrtcRetry));
+        }
+        function netTrtcConnect(){
+            if(!onlineStarted||onlineEnded||!onlineRoomId||!authToken||netTrtcOff||netTrtc||netTrtcConnecting) return;
+            netTrtcConnecting=true;
+            authApi('/rtc/sig',{method:'POST'}).then(d=>{
+                if(!d||!d.sdkAppId||!d.userSig||!d.roomId) return null;
+                if(!onlineStarted||onlineEnded||netTrtc) return null;
+                return netTrtcLoad().then(SDK=>{
+                    if(!SDK||!onlineStarted||onlineEnded||netTrtc) return null;
+                    const trtc=SDK.create(); netTrtc=trtc;
+                    trtc.on(SDK.EVENT.CUSTOM_MESSAGE,netTrtcReceive);
+                    trtc.on(SDK.EVENT.KICKED_OUT,()=>netTrtcDrop(true));
+                    return trtc.enterRoom({
+                        sdkAppId:d.sdkAppId, userId:String(d.userId), userSig:d.userSig, roomId:d.roomId,
+                        scene:'rtc', role:'anchor',
+                        autoReceiveAudio:false, autoReceiveVideo:false, enableAutoPlayDialog:false
+                    }).then(()=>{
+                        if(netTrtc!==trtc){ try{ trtc.exitRoom(); }catch(e){} try{ trtc.destroy(); }catch(e){} return; }
+                        netTrtcReady=true; netTrtcRetry=0;
+                        netTrtcState.readyAt=performance.now(); netTrtcState.pongAt=0; netTrtcState.rtt=0;
+                        netTrtcPingStart();
+                        if(netMode!=='p2p') netSyncBadge();
+                    });
+                });
+            }).catch(e=>{
+                if(e&&e.status===501) netTrtcOff=true;            // 服务端没配 TRTC 凭证：本局不再尝试
+                else netTrtcSchedule();
+            }).then(()=>{
+                netTrtcConnecting=false;
+                if(!netTrtcReady) netTrtcSchedule();
+            });
+        }
         function netSupported(){ return typeof RTCPeerConnection!=='undefined'; }
         function netWaitIce(pc){
             return new Promise(res=>{
@@ -2783,6 +2941,7 @@
             netSyncBadge();                  // 先显示真实通道（📡 数据库 → WS 通了变 ⚡ 中继）
             onlinePollStart(120);            // 数据库轮询先兜底，保证一定能打
             netRelayConnect();               // 同时建立 WebSocket 中继（通常 200ms 内可用）
+            netTrtcConnect();                // 同时申请 TRTC 进房签名（SDK 首次加载较慢，通了自动升级）
             if(!netSupported()) return;
             netFallbackTimer=setTimeout(()=>{
                 netFallbackTimer=null;
@@ -2848,15 +3007,19 @@
                 if(kind!=='end'&&netDc.bufferedAmount>8192) return;
                 try{ netDc.send(s); return; }catch(e){}
             }
-            if(netWsReady&&netWs&&netWs.readyState===1&&(kind==='end'||netWsHealthy())){
+            let fast=false;
+            if(kind==='end'||netTrtcHealthy()){ if(netTrtcSend(s,kind)!==0) fast=true; }
+            if(!fast&&netWsReady&&netWs&&netWs.readyState===1&&(kind==='end'||netWsHealthy())){
                 if(kind!=='end'&&netWs.bufferedAmount>16384) return;
-                try{ netWs.send(s); }catch(e){}
-                // 对端还没经中继发过消息（可能单边连不上）：每 4 条仍镜像一份到数据库
-                if(kind==='end'||netRelayActive()) return;
-                netState.mirror=(netState.mirror||0)+1;
-                if(netState.mirror%4) return;
+                try{ netWs.send(s); fast=true; }catch(e){}
             }
             if(kind==='end') return;
+            // 一条快通道都没用上（含 TRTC 单包超 1KB）：逐条走数据库兜底
+            if(!fast){ authApi('/rooms/msg',{method:'POST',body:{kind,payload:s}}).catch(()=>{}); return; }
+            // 对端还没经快通道回过消息（可能只通一边）：每 4 条仍镜像一份到数据库
+            if(netTrtcActive()||netRelayActive()) return;
+            netState.mirror=(netState.mirror||0)+1;
+            if(netState.mirror%4) return;
             authApi('/rooms/msg',{method:'POST',body:{kind,payload:s}}).catch(()=>{});
         }
         function handleNetGame(m){
@@ -2995,7 +3158,7 @@
             if(!netState.lastInputAt) netState.lastInputAt=now;
             if(now-netState.lastInputAt>15000){ onlineEnded=true; onlineAbort('对方已断开连接'); return; }
             if(remoteEnt&&remoteEnt.hp>0&&now-netState.lastInputAt>600){ remoteEnt.netMove={x:0,y:0}; }
-            const iv=netMode==='p2p'?45:(netWsReady?50:120);
+            const iv=netMode==='p2p'?45:((netTrtcHealthy()||netWsHealthy())?50:120);
             if(now-netState.lastStateAt<iv) return;
             netState.lastStateAt=now;
             netSend({t:'s',d:serializeNetState()});
@@ -3039,7 +3202,7 @@
             }
             // 远端实体：在最近两个快照之间按时间插值；中继模式快照更稀，缓冲加大并允许外推，避免一跳一跳
             const p2p=netMode==='p2p';
-            const rt=now-(p2p?60:(netWsReady?80:150));
+            const rt=now-(p2p?60:((netTrtcHealthy()||netWsHealthy())?80:150));
             entities.forEach(e=>{
                 if(e===manualEnt||e.netTX==null) return;
                 if(e.netPX!=null&&e.netT>e.netPT&&e.netPT>0){
@@ -3062,7 +3225,7 @@
                 }
             });
             for(let i=particles.length-1;i>=0;i--){ particles[i].x+=particles[i].vx; particles[i].y+=particles[i].vy; particles[i].life-=16*dt; if(particles[i].life<=0) particles.splice(i,1); }
-            if(now-netState.lastInputAt>=(netMode==='p2p'?33:(netWsReady?50:100))){
+            if(now-netState.lastInputAt>=(netMode==='p2p'?33:((netTrtcHealthy()||netWsHealthy())?50:100))){
                 netState.lastInputAt=now;
                 netSendInput();
             }

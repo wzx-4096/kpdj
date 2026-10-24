@@ -107,6 +107,17 @@ function main() {
     fs.copyFileSync(mtcSrc, path.join(DIST, 'MTC.html'));
     console.log('COPY MTC.html →', path.join(DIST, 'MTC.html'));
   }
+
+  // 8) 第三方 SDK 目录（TRTC）按原样随包发布，联机时才按需加载，不进入首屏单文件
+  const vendorSrc = path.join(PUB, 'vendor');
+  if (fs.existsSync(vendorSrc)) {
+    const vendorDst = path.join(DIST, 'vendor');
+    fs.mkdirSync(vendorDst, { recursive: true });
+    for (const f of fs.readdirSync(vendorSrc)) {
+      fs.copyFileSync(path.join(vendorSrc, f), path.join(vendorDst, f));
+      console.log('COPY vendor/' + f + ' →', vendorDst);
+    }
+  }
 }
 
 main();

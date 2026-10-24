@@ -15,3 +15,7 @@ database_id = "01ce5695-232f-4c3a-933d-bcb22877f8f3"
 # 两个密钥不要写在这里，用控制台或命令设置：
 #   wrangler pages secret put SESSION_SECRET --project-name kpdj
 #   wrangler pages secret put ADMIN_PASS_HASH  --project-name kpdj
+# TRTC 快通道（腾讯云实时音视频，自定义消息通道）：
+#   wrangler pages secret put TRTC_SDKAPPID --project-name kpdj
+#   wrangler pages secret put TRTC_SECRET   --project-name kpdj
+# 未配置时 /api/rtc/sig 返回 501，前端自动跳过 TRTC，仍走中继/数据库

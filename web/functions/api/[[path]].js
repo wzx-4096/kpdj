@@ -23,10 +23,11 @@
 //   POST   /api/rooms/signal    { kind, payload }
 //   POST   /api/rooms/msg       { kind, payload }
 //   POST   /api/rooms/ticket    （签发 WebSocket 中继票据，返回 { ticket, url }）
+//   POST   /api/rtc/sig         （签发 TRTC 进房签名，返回 { sdkAppId, userId, userSig, roomId }）
 //   POST   /api/admin/login     { password }
 //   GET    /api/admin/players   （Bearer 管理员 token）
 //   DELETE /api/admin/players/:pid（Bearer 管理员 token）
-// 环境变量/绑定：DB（D1）、SESSION_SECRET、ADMIN_PASS_HASH、RELAY_SECRET、RELAY_URL
+// 环境变量/绑定：DB（D1）、SESSION_SECRET、ADMIN_PASS_HASH、RELAY_SECRET、RELAY_URL、TRTC_SDKAPPID、TRTC_SECRET
 // 密码只存 PBKDF2-SHA256 哈希（pbkdf2$迭代数$盐$哈希），不存明文。
 
 const PBKDF2_ITER = 12000;                                  // Workers 免费版单次 10ms CPU，迭代数不能太高
@@ -753,6 +754,59 @@ async function handleRoomTicket(request, env) {
   return json({ ticket, url: relayWsBase(request) });
 }
 
+// ---------- TRTC 通道（腾讯云实时音视频自定义消息） ----------
+// 客户端拿 UserSig 进同一个 TRTC 房间，之后状态/输入走 TRTC 自定义消息（单包 1KB、30 条/秒）。
+// SecretKey 只存在于 Pages 环境变量 TRTC_SECRET，绝不下发到前端。
+// 算法与官方 tls-sig-api-v2-node 一致：HMAC-SHA256(明文串) → base64 写入 TLS.sig → JSON → deflate → base64(url 安全转义)
+function b64bytes(bytes) {
+  const arr = new Uint8Array(bytes);
+  let s = '';
+  for (let i = 0; i < arr.length; i++) s += String.fromCharCode(arr[i]);
+  return btoa(s);
+}
+async function hmacB64(secret, text) {
+  const sig = await crypto.subtle.sign('HMAC', await hmacKey(secret), enc.encode(text));
+  return b64bytes(sig);
+}
+async function trtcUserSig(sdkAppId, secret, userId, expire) {
+  const currTime = nowSec();
+  const content = 'TLS.identifier:' + userId + '\n'
+    + 'TLS.sdkappid:' + sdkAppId + '\n'
+    + 'TLS.time:' + currTime + '\n'
+    + 'TLS.expire:' + expire + '\n';
+  const doc = {
+    'TLS.ver': '2.0',
+    'TLS.identifier': userId,
+    'TLS.sdkappid': Number(sdkAppId),
+    'TLS.time': Number(currTime),
+    'TLS.expire': Number(expire),
+    'TLS.sig': await hmacB64(secret, content)
+  };
+  const jsonStr = JSON.stringify(doc);
+  const stream = new Blob([jsonStr]).stream().pipeThrough(new CompressionStream('deflate'));
+  const zipped = new Uint8Array(await new Response(stream).arrayBuffer());
+  return b64bytes(zipped).replace(/\+/g, '*').replace(/\//g, '-').replace(/=/g, '_');
+}
+async function handleRtcSig(request, env) {
+  const auth = await requirePlayer(request, env);
+  if (auth.error) return auth.error;
+  if (!env.TRTC_SDKAPPID || !env.TRTC_SECRET) return fail('NO_TRTC', '服务端未配置 TRTC 凭证', 501);
+  const room = await activeRoomOf(env, auth.user.pid);
+  if (!room) return fail('ROOM_NOT_FOUND', '你不在任何房间中', 404);
+  if (!room.guest_pid) return fail('ROOM_NOT_READY', '对方还没有加入房间', 409);
+  if (ticketLimited(auth.user.pid)) return fail('TOO_MANY', '请求太频繁，请稍后再试', 429);
+
+  const sdkAppId = parseInt(env.TRTC_SDKAPPID, 10);
+  const roomId = parseInt(room.id, 36);                       // 6 位房间码按 36 进制转数字，< 2^32 且一一对应
+  if (!sdkAppId || !roomId) return fail('NO_TRTC', '服务端 TRTC 配置无效', 501);
+  const expire = 3 * 3600;
+  return json({
+    sdkAppId, roomId, expire,
+    userId: auth.user.pid,
+    userSig: await trtcUserSig(sdkAppId, env.TRTC_SECRET, auth.user.pid, expire)
+  });
+}
+
 // ---------- 管理员 ----------
 async function handleAdminLogin(request, env) {
   if (!env.SESSION_SECRET) return fail('NO_SESSION_SECRET', '服务端未配置 SESSION_SECRET', 500);
@@ -867,6 +921,7 @@ export async function onRequest(context) {
     if (path === '/api/rooms/signal' && method === 'POST') return handleRoomSignal(request, env);
     if (path === '/api/rooms/msg' && method === 'POST') return handleRoomMsg(request, env);
     if (path === '/api/rooms/ticket' && method === 'POST') return handleRoomTicket(request, env);
+    if (path === '/api/rtc/sig' && method === 'POST') return handleRtcSig(request, env);
     if (path === '/api/admin/login' && method === 'POST') return handleAdminLogin(request, env);
     if (path === '/api/admin/players' && method === 'GET') return handleAdminPlayers(url, request, env);
     if (path === '/api/admin/migrate' && method === 'POST') return handleAdminMigrate(request, env);
