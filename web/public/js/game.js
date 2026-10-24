@@ -3193,7 +3193,7 @@
                 netState.lastRecvAt=performance.now();
                 netState.lastInputAt=performance.now();
                 netState.lastStateAt=0; netState.seq=0;
-                onlineBadge(onlineHost?'🔗 连接中…':'🔗 连接中…');
+                netSyncBadge();
             });
             netConnect();
             if(netPendingOffer&&netGuest){ const p=netPendingOffer; netPendingOffer=''; netOnOffer(p); }
