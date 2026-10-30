@@ -118,6 +118,18 @@ function main() {
       console.log('COPY vendor/' + f + ' →', vendorDst);
     }
   }
+
+  // 9) 音频资源（讲解石出场音乐 public/audio → dist/audio）
+  const audioSrc = path.join(PUB, 'audio');
+  if (fs.existsSync(audioSrc)) {
+    const files = fs.readdirSync(audioSrc).filter(f => f !== '.gitkeep');
+    if (files.length) {
+      const audioDst = path.join(DIST, 'audio');
+      fs.mkdirSync(audioDst, { recursive: true });
+      for (const f of files) fs.copyFileSync(path.join(audioSrc, f), path.join(audioDst, f));
+      console.log('COPY audio →', audioDst, '=', files.join(', '));
+    }
+  }
 }
 
 main();

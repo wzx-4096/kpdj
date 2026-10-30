@@ -14,6 +14,9 @@
         function sfxSonic(){ playSound(150,'sine',0.18,0.2,80); }
         function sfxFreeze(){ playSound(80,'sawtooth',0.2,0.15); }
         function sfxSummon(){ playSound(500,'sine',0.15,0.15,700); }
+        // 讲解石出场音乐（public/audio/01.mp3）：每次召唤都从头播放
+        const lectureStoneSnd=new Audio('./audio/01.mp3'); lectureStoneSnd.volume=0.9; lectureStoneSnd.preload='auto';
+        function sfxLectureStone(){ try{ lectureStoneSnd.currentTime=0; const p=lectureStoneSnd.play(); if(p&&p.catch) p.catch(()=>{}); }catch(e){} }
         function sfxRevive(){ playSound(400,'sine',0.2,0.3,600); }
         function sfxSlam(){ playSound(150,'triangle',0.12,0.3,60); }
         function sfxPhone(){ playSound(1150,'square',0.08,0.12,1500); setTimeout(()=>playSound(1150,'square',0.08,0.12,1500),110); setTimeout(()=>playSound(1450,'square',0.1,0.12,1900),220); }
@@ -169,7 +172,7 @@
             { id:'lichenyu', name:'李晨雨', avatar:'👧', hp:300, color:'#a679ff', skillInterval:5500, skillType:'sonic_wave', skillDamage:20, bounceLimit:0, projectileColor:'#ffffff', projectileSize:22, projectileSpeed:4.0, moveSpeed:1.1, size:32, desc:'声波〰️5.5秒 穿透伤20 半血死亡笔记📓' },
             { id:'zhuhaoyu', name:'朱皓宇', avatar:'👦', hp:300, color:'#f0c060', skillInterval:4500, skillType:'random_luxury', skillDamage:0, bounceLimit:0, projectileColor:'#ffd700', projectileSize:20, projectileSpeed:3.6, moveSpeed:1.1, size:30, desc:'随机🚗28/⌚20' },
             { id:'dingxiaohua', name:'丁晓华', avatar:'👩‍💻', hp:300, color:'#66ccff', skillInterval:7000, skillType:'freeze_computer', skillDamage:30, bounceLimit:0, projectileColor:'#00aaff', projectileSize:24, projectileSpeed:3.4, moveSpeed:1.15, size:32, desc:'电脑💻7秒 时停3秒' },
-            { id:'renqiuhong', name:'任秋红', avatar:'👩‍🏫', hp:300, color:'#ff99cc', skillInterval:10000, skillType:'spawn_emperor', skillDamage:0, bounceLimit:0, projectileColor:'#ffd700', projectileSize:0, projectileSpeed:0, moveSpeed:1.0, size:30, desc:'召唤皇帝👑10秒 上限5' },
+            { id:'renqiuhong', name:'历史老师', avatar:'👩‍🏫', hp:380, color:'#ff99cc', skillInterval:6000, skillType:'spawn_emperor', skillDamage:0, bounceLimit:0, projectileColor:'#ffd700', projectileSize:0, projectileSpeed:0, moveSpeed:1.0, size:30, desc:'召唤讲解石 6秒 上限8' },
             { id:'chengxinxin', name:'程梓鑫', avatar:'🧑‍🍳', hp:300, color:'#f5a623', skillInterval:5000, skillType:'beef_cake', skillDamage:15, bounceLimit:5, projectileColor:'#d2691e', projectileSize:20, projectileSpeed:3.0, moveSpeed:1.1, size:30, desc:'牛肉饼🍔5秒 弹5次' },
             { id:'zhaolina', name:'赵丽娜', avatar:'👩‍🏫', hp:300, color:'#90ee90', skillInterval:1000, skillType:'spinach', skillDamage:5, bounceLimit:0, projectileColor:'#228b22', projectileSize:16, projectileSpeed:3.0, moveSpeed:1.0, size:30, desc:'菠菜🥬每秒1发 可复活', hasRevive: true },
             { id:'liuyiming', name:'刘一鸣', avatar:'🧑‍🎓', hp:300, color:'#ffb347', skillInterval:3000, skillType:'popcorn_chicken', skillDamage:15, bounceLimit:0, projectileColor:'#ff8c00', projectileSize:14, projectileSpeed:3.2, moveSpeed:1.1, size:30, desc:'鸡米花🍿3秒 伤15 分身', hasSpawn: true,
@@ -181,7 +184,11 @@
             { id:'liukun', name:'刘焜', avatar:'😋', hp:400, color:'#ff8c5a', skillInterval:9999999, skillType:'melee', skillDamage:10, bounceLimit:0, projectileColor:'#ff8c5a', projectileSize:0, projectileSpeed:0, moveSpeed:1.0, size:40, desc:'干饭😋吃食物长大 碰10伤 10秒冲锋30伤' }
         ];
 
-        const EMPEROR_ROLE = { id:'emperor', name:'皇帝', avatar:'👑', hp:30, color:'#ffd700', skillInterval:9999999, skillType:'melee', skillDamage:15, projectileColor:'#ffd700', projectileSize:0, projectileSpeed:0, moveSpeed:1.8, size:22, desc:'近战碰撞伤害15' };
+        const EMPEROR_ROLE = { id:'emperor', name:'讲解石', avatar:'', hp:60, color:'#9fb0c8', skillInterval:9999999, skillType:'melee', skillDamage:22, projectileColor:'#ffd700', projectileSize:0, projectileSpeed:0, moveSpeed:2.1, size:40, desc:'讲解石碰撞伤害22' };
+        // 讲解石素材（public/images/02.png）：加载完成后按原图比例绘制，加载中先用圆形占位
+        const lectureStoneImg=new Image(); let lectureStoneReady=false;
+        lectureStoneImg.onload=()=>{ lectureStoneReady=true; };
+        lectureStoneImg.src='./images/02.png';
         const PARENT_ROLES = [
             { id:'dad', name:'家长', avatar:'👨', hp:100, color:'#9a8a6a', skillInterval:9999999, skillType:'melee', skillDamage:10, projectileColor:'#ffffff', projectileSize:0, projectileSpeed:0, moveSpeed:1.1, size:30, desc:'家长随机弹跳，碰撞学生扣10' },
             { id:'mom', name:'家长', avatar:'👩', hp:100, color:'#b08a6a', skillInterval:9999999, skillType:'melee', skillDamage:10, projectileColor:'#ffffff', projectileSize:0, projectileSpeed:0, moveSpeed:1.1, size:30, desc:'家长随机弹跳，碰撞学生扣10' }
@@ -1161,7 +1168,7 @@
                 hudSignature=sig;
                 let html='';
                 alive.forEach(ent=>{
-                    const label=ent.isEmperor?'👑皇帝':(gameMode==='storyduel'?(ent.isManual?'你':(storyMe&&ent.owner===storyMe.owner?'队友':'敌方')):(ent.owner==='player1'?'玩家1':(ent.owner==='player2'?'玩家2':'P'+(parseInt(ent.owner.slice(1),10)+1))));
+                    const label=ent.isEmperor?'讲解石':(gameMode==='storyduel'?(ent.isManual?'你':(storyMe&&ent.owner===storyMe.owner?'队友':'敌方')):(ent.owner==='player1'?'玩家1':(ent.owner==='player2'?'玩家2':'P'+(parseInt(ent.owner.slice(1),10)+1))));
                     const hpP=Math.max(0,(ent.hp/ent.maxHp)*100);
                     const danger=hpP<30?' danger':'';
                     html+=`<div class="hud-card"><span style="font-size:16px;">${ent.role.avatar}</span> <b style="color:#fff;font-size:11px;">${rn(ent.role)}</b> <span style="color:#888;font-size:9px;">[${label}]</span><div class="hud-hp-bar"><div class="hud-hp-fill${danger}" style="width:${hpP}%;"></div></div><span style="font-size:9px;color:#f99;">${Math.ceil(Math.max(0,ent.hp))}/${ent.maxHp}</span></div>`;
@@ -1194,8 +1201,8 @@
             if(ent.role.skillType==='spawn_emperor'){
                 if(ent.role.id!=='renqiuhong') return;
                 const currentEmperors = entities.filter(e => e.isEmperor && e.owner === ent.owner && e.hp > 0);
-                if(currentEmperors.length >= 5) return;
-                sfxSummon();
+                if(currentEmperors.length >= 8) return;
+                sfxLectureStone();
                 const emperor = createEntity(EMPEROR_ROLE, ent.owner, 0, 1, true);
                 emperor.x = ent.x + (Math.random()-0.5)*30;
                 emperor.y = ent.y + (Math.random()-0.5)*30;
@@ -1465,8 +1472,8 @@
                     const dx=b.x-a.x, dy=b.y-a.y, dist=Math.sqrt(dx*dx+dy*dy), min=(a.size+b.size)/2;
                     if(dist<=0.01){ b.x+=(Math.random()-0.5)*2; b.y+=(Math.random()-0.5)*2; continue; } // 完全重合时微扰分离，防止卡死
                     if(dist<min && !(ts<a.frozenUntil||ts<b.frozenUntil)){
-                        if(a.isEmperor && !b.isEmperor && ts>=b.invincibleUntil){ b.hp -= 15; b.flashTimer=150; sfxHit(); spawnDamagePop(b.x,b.y,15); noteCheck(b, a); }
-                        if(b.isEmperor && !a.isEmperor && ts>=a.invincibleUntil){ a.hp -= 15; a.flashTimer=150; sfxHit(); spawnDamagePop(a.x,a.y,15); noteCheck(a, b); }
+                        if(a.isEmperor && !b.isEmperor && ts>=b.invincibleUntil){ b.hp -= a.role.skillDamage; b.flashTimer=150; sfxHit(); spawnDamagePop(b.x,b.y,a.role.skillDamage); noteCheck(b, a); }
+                        if(b.isEmperor && !a.isEmperor && ts>=a.invincibleUntil){ a.hp -= b.role.skillDamage; a.flashTimer=150; sfxHit(); spawnDamagePop(a.x,a.y,b.role.skillDamage); noteCheck(a, b); }
                         if(a.isParent && b.role.faction==='student' && ts>=a.parentAtkUntil){ a.parentAtkUntil=ts+800; b.hp-=10; b.flashTimer=150; sfxHit(); spawnDamagePop(b.x,b.y,10); noteCheck(b, a); }
                         if(b.isParent && a.role.faction==='student' && ts>=b.parentAtkUntil){ b.parentAtkUntil=ts+800; a.hp-=10; a.flashTimer=150; sfxHit(); spawnDamagePop(a.x,a.y,10); noteCheck(a, b); }
                         if(a.role.id==='liukun' && !a.charging && ts>=a.liukunAtkUntil){ a.liukunAtkUntil=ts+800; b.hp-=10; b.flashTimer=150; sfxHit(); spawnDamagePop(b.x,b.y,10); noteCheck(b, a); }
@@ -1814,8 +1821,21 @@
                     ctx.strokeStyle='#90ee90'; ctx.lineWidth=2; ctx.setLineDash([4,4]); ctx.beginPath(); ctx.arc(e.x,e.y,e.size/2+6,0,Math.PI*2); ctx.stroke(); ctx.setLineDash([]);
                 }
                 const glow=ctx.createRadialGradient(e.x,e.y,e.size*0.3,e.x,e.y,e.size*0.85); glow.addColorStop(0,e.role.color+'50'); glow.addColorStop(1,'transparent'); ctx.fillStyle=glow; ctx.beginPath(); ctx.arc(e.x,e.y,e.size*0.85,0,Math.PI*2); ctx.fill();
-                ctx.fillStyle=e.role.color; ctx.beginPath(); ctx.arc(e.x,e.y,e.size/2,0,Math.PI*2); ctx.fill();
-                ctx.fillStyle='#fff'; ctx.font=`${e.size*0.55}px sans-serif`; ctx.textAlign='center'; ctx.fillText(e.role.avatar,e.x,e.y+1);
+                if(e.isEmperor){
+                    // 讲解石：用 02 图片素材按原图比例绘制，不再画圆形表情包
+                    if(lectureStoneReady){
+                        const S=e.size*1.2, iw=lectureStoneImg.width, ih=lectureStoneImg.height;
+                        const k=Math.min(S/iw,S/ih), dw=iw*k, dh=ih*k;
+                        ctx.save(); ctx.shadowColor='rgba(255,205,90,0.9)'; ctx.shadowBlur=12;
+                        ctx.drawImage(lectureStoneImg,e.x-dw/2,e.y-dh/2,dw,dh);
+                        ctx.restore();
+                    }else{
+                        ctx.fillStyle=e.role.color; ctx.beginPath(); ctx.arc(e.x,e.y,e.size/2,0,Math.PI*2); ctx.fill();
+                    }
+                }else{
+                    ctx.fillStyle=e.role.color; ctx.beginPath(); ctx.arc(e.x,e.y,e.size/2,0,Math.PI*2); ctx.fill();
+                    ctx.fillStyle='#fff'; ctx.font=`${e.size*0.55}px sans-serif`; ctx.textAlign='center'; ctx.fillText(e.role.avatar,e.x,e.y+1);
+                }
                 if(e.isManual && !e.isRemote && joySkill.active){
                     const sm=Math.hypot(joySkill.x,joySkill.y);
                     if(sm>0.15){
@@ -1906,7 +1926,7 @@
                     showVictory('同归于尽 💀', '💀', '#888888');
                 } else {
                     const winner = alive.find(e => !e.isEmperor) || alive[0];
-                    const label = winner.isEmperor ? ('皇帝(' + (winner.summoner ? rn(winner.summoner.role) : '?') + ')') : ((gameMode==='dual'||gameMode==='online') ? (winner.owner==='player1'?'玩家1':'玩家2') : rn(winner.role));
+                    const label = winner.isEmperor ? ('讲解石(' + (winner.summoner ? rn(winner.summoner.role) : '?') + ')') : ((gameMode==='dual'||gameMode==='online') ? (winner.owner==='player1'?'玩家1':'玩家2') : rn(winner.role));
                     if(resultEl) resultEl.textContent = `🏆 ${label} 获胜！`;
                     showVictory(label+' 获胜！', winner.role.avatar, winner.role.color);
                 }
