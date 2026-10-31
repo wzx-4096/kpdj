@@ -572,6 +572,8 @@
    8px 间距节奏、键盘可达性；手机端完全不受影响
    ============================================================ */
 .pc-only { display:none; }
+/* 手机上按钮区只是透明外壳，保持原有纵向排列；电脑端才变成独立面板 */
+.menu-actions { display:contents; }
 body.pc { background:radial-gradient(1200px 720px at 50% -8%, #1b1d3a 0%, #101122 52%, #08080f 100%); overflow-y:auto; }
 body.pc .bg-particles { opacity:0.18; }
 body.pc .game-container { max-width:1280px; min-height:100vh; padding:32px clamp(24px,4vw,56px); gap:18px; justify-content:center; }
@@ -593,21 +595,83 @@ body.pc .btn-info:hover { box-shadow:0 10px 26px rgba(0,0,0,0.45), 0 0 22px rgba
 body.pc .btn-warning:hover { box-shadow:0 10px 26px rgba(0,0,0,0.45), 0 0 22px rgba(240,160,64,0.3); }
 body.pc .btn:focus-visible, body.pc .set-item:focus-visible, body.pc .light-toggle:focus-visible, body.pc .card-display:focus-visible { outline:2px solid #fff; outline-offset:3px; }
 
-/* —— 主菜单：居中启动面板 + 三列快捷入口 —— */
+/* —— 主菜单：左上账号 / 右上设置 / 左侧立体角色卡 / 右侧按钮（无外框） —— */
 body.pc #screenMenu.active {
-    display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px 16px;
-    width:min(100%,860px); padding:44px 48px 36px; border-radius:26px;
-    background:linear-gradient(180deg,rgba(28,30,54,0.78) 0%,rgba(13,14,26,0.9) 100%);
-    border:1px solid rgba(240,192,96,0.22);
-    box-shadow:0 30px 90px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.06);
+    position:relative;
+    display:grid;
+    grid-template-columns:minmax(240px,340px) minmax(0,1fr);
+    grid-template-rows:auto minmax(0,1fr) auto;
+    align-items:center;
+    column-gap:clamp(36px,5vw,84px);
+    width:min(100%,1160px);
+    min-height:calc(100vh - 96px);
+    padding:12px 8px 6px;
+    background:none; border:none; box-shadow:none; border-radius:0;
 }
-body.pc #screenMenu.active > :nth-child(1) { grid-column:1/-1; font-size:46px !important; letter-spacing:6px; }
-body.pc #screenMenu.active > :nth-child(2) { grid-column:1/-1; }
-body.pc #screenMenu.active > :nth-child(3) { display:none; }
-body.pc #screenMenu.active > #btnStartGame { grid-column:1/-1; height:64px; font-size:20px; border-radius:18px; color:#15152a; border-color:#ffe9b0; background:linear-gradient(135deg,#f8dc96,#e3ab3c); box-shadow:0 12px 32px rgba(240,192,96,0.3); }
-body.pc #screenMenu.active > #btnStartGame:hover { transform:translateY(-3px); filter:brightness(1.06); box-shadow:0 16px 40px rgba(240,192,96,0.42); }
-body.pc #screenMenu .btn-sm { height:52px; font-size:14px; }
-body.pc #screenMenu #versionLabel { grid-column:1/-1; font-size:12px !important; color:#8a93b8 !important; margin-top:2px; }
+body.pc #screenMenu.active > .game-title,
+body.pc #screenMenu.active > .game-subtitle,
+body.pc #screenMenu.active > #menuVsDeco { display:none; }
+body.pc #pcMenuTitle {
+    display:block; grid-column:1/-1; grid-row:1; text-align:center;
+    font-size:clamp(36px,4vw,56px); font-weight:900; letter-spacing:clamp(6px,1vw,14px);
+    color:var(--gold); line-height:1.15; padding-top:2px;
+    text-shadow:0 0 34px rgba(240,192,96,0.34), 0 10px 30px rgba(0,0,0,0.65);
+}
+/* 左上角：头像在上、用户名在下，点开进入账号设置 */
+body.pc #pcUserChip {
+    position:absolute; top:0; left:0; z-index:12;
+    display:flex; flex-direction:column; align-items:flex-start; gap:6px;
+    padding:8px; border-radius:18px; cursor:pointer;
+    transition:background 0.2s, transform 0.2s;
+}
+body.pc #pcUserChip:hover { background:rgba(255,255,255,0.05); transform:translateY(-1px); }
+body.pc #pcUserChip:focus-visible { outline:2px solid #fff; outline-offset:2px; }
+.pc-user-avatar { width:56px; height:56px; border-radius:50%; overflow:hidden; display:flex; align-items:center; justify-content:center; background:linear-gradient(135deg,#3a6db5,#7d5a9e); border:1px solid rgba(240,192,96,0.35); box-shadow:0 8px 22px rgba(0,0,0,0.45); font-size:26px; }
+.pc-user-avatar img { width:100%; height:100%; object-fit:cover; display:block; }
+.pc-user-name { max-width:120px; color:#b9c2dc; font-size:12px; font-weight:700; line-height:1.25; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+/* 右上角：圆形设置按钮 */
+body.pc #screenMenu #btnSettings {
+    position:absolute; top:6px; right:0; z-index:12;
+    width:56px; height:56px; min-width:0; padding:0; margin:0;
+    border-radius:50%; font-size:0; display:flex; align-items:center; justify-content:center;
+    background:rgba(255,255,255,0.05); border:1px solid rgba(240,192,96,0.26); box-shadow:0 8px 22px rgba(0,0,0,0.4);
+}
+body.pc #screenMenu #btnSettings::before { content:'⚙️'; font-size:24px; line-height:1; }
+body.pc #screenMenu #btnSettings:hover { transform:translateY(-2px) rotate(25deg); border-color:var(--gold); }
+body.pc #screenMenu #btnSettings:active { transform:scale(0.94); }
+/* 左侧：倾斜立体角色卡（每次回到主菜单随机） */
+body.pc #pcMenuCard {
+    grid-column:1; grid-row:2; justify-self:center; align-self:center;
+    position:relative; width:min(100%,340px,calc((100vh - 260px) * 0.7)); aspect-ratio:0.7;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px;
+    padding:30px 24px 26px; border-radius:22px;
+    background:linear-gradient(155deg,rgba(40,44,80,0.96) 0%,rgba(20,23,44,0.98) 52%,rgba(10,11,22,0.99) 100%);
+    box-shadow:26px 34px 70px rgba(0,0,0,0.6), 0 0 70px -12px var(--role-color,#f0c060), inset 0 1px 0 rgba(255,255,255,0.08);
+    transform:perspective(1000px) rotateY(15deg) rotateZ(-5deg);
+    transform-origin:50% 62%;
+    transition:transform 0.38s cubic-bezier(0.2,0.9,0.3,1.1), box-shadow 0.38s;
+}
+body.pc #pcMenuCard:hover { transform:perspective(1000px) rotateY(7deg) rotateZ(-2deg) translateY(-6px); }
+body.pc .pc-card-chip { position:absolute; top:14px; left:16px; font-size:11px; letter-spacing:2px; color:#8a93b8; background:rgba(255,255,255,0.06); padding:3px 10px; border-radius:999px; }
+body.pc .pc-card-avatar { font-size:clamp(64px,7vw,104px); line-height:1.1; filter:drop-shadow(0 12px 20px rgba(0,0,0,0.5)); }
+body.pc .pc-card-name { color:#fff; font-size:clamp(22px,2vw,30px); font-weight:900; letter-spacing:4px; }
+body.pc .pc-card-hp { color:#ffb3b3; font-size:13px; font-weight:700; }
+body.pc .pc-card-skill { color:#9aa3c2; font-size:11px; line-height:1.6; text-align:center; max-width:86%; }
+/* 右侧：开始按钮 + 2×3 操作区，统一宽度对齐 */
+body.pc #screenMenu .menu-actions {
+    grid-column:2; grid-row:2; align-self:center; justify-self:stretch;
+    display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); grid-template-rows:auto auto auto auto;
+    gap:14px; width:100%; max-width:640px;
+}
+body.pc #screenMenu .menu-actions > #btnStartGame { grid-area:1/1/2/3; height:78px; font-size:22px; letter-spacing:2px; border-radius:18px; color:#15152a; border-color:#ffe9b0; background:linear-gradient(135deg,#f8dc96,#e3ab3c); box-shadow:0 14px 34px rgba(240,192,96,0.32); }
+body.pc #screenMenu .menu-actions > #btnStartGame:hover { transform:translateY(-3px); filter:brightness(1.06); box-shadow:0 18px 44px rgba(240,192,96,0.45); }
+body.pc #screenMenu #btnShowRules { grid-area:2/1; }
+body.pc #screenMenu #btnFullscreen { grid-area:2/2; }
+body.pc #screenMenu #btnSupport { grid-area:3/1; }
+body.pc #screenMenu #btnFriends { grid-area:3/2; }
+body.pc #screenMenu #btnAccount { grid-area:4/1/5/3; }
+body.pc #screenMenu .menu-actions > .btn-sm { width:100%; min-width:0; height:60px; margin:0; font-size:15px; border-radius:16px; }
+body.pc #screenMenu #versionLabel { grid-column:1/-1; grid-row:3; justify-self:center; font-size:12px !important; color:#6b7390 !important; margin-top:10px; }
 
 /* —— 模式选择：三列大按钮卡片 —— */
 body.pc #screenMode.active {
@@ -645,6 +709,10 @@ body.pc #screenSettings #btnSettingsBack, body.pc #screenDev #btnDevBack { grid-
 body.pc #btnJoySetting { display:none; }
 body.pc #pcKeyHint { display:flex; grid-column:1/-1; cursor:default; }
 body.pc #pcKeyHint:hover { border-color:var(--border); background:var(--panel); transform:none; }
+
+/* —— 密码弹窗：通用按钮最小宽度会把确定按钮撑出边框，这里单独收窄 —— */
+body.pc #modalPwd .modal-box { width:min(92%,400px) !important; max-width:400px !important; overflow-x:hidden; }
+body.pc #modalPwd .btn { min-width:0; flex:1 1 0; padding:10px 14px; height:44px; font-size:14px; border-radius:12px; }
 
 /* —— 沉浸光感 —— */
 body.pc #screenLight .modal-box { width:min(100%,480px) !important; max-width:none !important; }
@@ -725,17 +793,41 @@ body.pc .dlg-text { font-size:17px; height:70px; }
 body.pc .dlg-speaker b { font-size:15px; }
 
 /* —— 窄窗口下的电脑端降级（仍是桌面交互，只是减少栏数） —— */
+@media (max-width:1100px) {
+    body.pc #screenMenu.active { grid-template-columns:minmax(200px,260px) minmax(0,1fr); column-gap:32px; }
+    body.pc #pcMenuCard { width:min(100%,260px,calc((100vh - 230px) * 0.7)); }
+    body.pc #pcMenuTitle { font-size:40px; letter-spacing:8px; }
+}
 @media (max-width:960px) {
     body.pc .game-container { padding:20px 18px; }
-    body.pc #screenMenu.active { grid-template-columns:repeat(2,minmax(0,1fr)); padding:28px 26px 24px; }
-    body.pc #screenMenu.active > .game-title { font-size:36px !important; }
     body.pc #screenMode.active { grid-template-columns:repeat(2,minmax(0,1fr)); padding:24px 22px; }
     body.pc #screenMode .btn { height:74px; font-size:16px; }
     body.pc #screenSettings.active, body.pc #screenDev.active { grid-template-columns:1fr; }
     body.pc #screenSettings .set-item, body.pc #screenDev .set-item { grid-column:1/-1; }
-    body.pc #screenAbout.active { grid-template-columns:1fr; }
-    body.pc #screenAbout.active > :nth-child(2) { grid-row:auto; max-height:64vh; }
     body.pc #screenSupport .modal-box, body.pc #screenFriends .modal-box, body.pc #screenChat .modal-box { height:min(66vh,560px) !important; }
+}
+@media (max-width:860px) {
+    body.pc #screenMenu.active { grid-template-columns:minmax(0,1fr); grid-template-rows:auto auto auto auto; row-gap:20px; min-height:0; padding:70px 4px 4px; justify-items:center; }
+    body.pc #pcMenuTitle { font-size:34px; letter-spacing:6px; }
+    body.pc #pcUserChip { flex-direction:row; align-items:center; top:6px; left:4px; }
+    body.pc .pc-user-name { margin-top:0; max-width:96px; }
+    body.pc #pcMenuCard { grid-column:1; grid-row:2; width:min(62vw,240px); aspect-ratio:0.82; padding:20px 16px; }
+    body.pc .pc-card-avatar { font-size:48px; }
+    body.pc .pc-card-name { font-size:20px; letter-spacing:2px; }
+    body.pc .pc-card-skill { display:none; }
+    body.pc #screenMenu .menu-actions { grid-column:1; grid-row:3; max-width:560px; }
+    body.pc #screenMenu #btnSettings { width:44px; height:44px; }
+    body.pc #screenMenu #btnSettings::before { font-size:20px; }
+    body.pc #screenMenu #versionLabel { grid-row:4; }
+}
+@media (max-width:820px) {
+    body.pc #screenAbout.active { grid-template-columns:1fr; width:min(100%,760px); }
+    body.pc #screenAbout.active > :nth-child(2) { grid-row:auto; max-height:64vh; }
+}
+@media (max-width:700px) {
+    body.pc #pcMenuCard { display:none; }
+    body.pc #screenMenu .menu-actions { grid-row:2; }
+    body.pc #screenMenu #versionLabel { grid-row:3; }
 }
 
 

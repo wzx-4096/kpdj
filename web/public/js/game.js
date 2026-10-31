@@ -251,6 +251,7 @@
                 const el=document.getElementById(id); if(el) el.classList.remove('active');
             });
             if(s) s.classList.add('active');
+            if(s && s.id==='screenMenu') renderPcMenuRole();
             initAudio();
             // 每个模式一首曲子：战斗按模式细分，其余按界面
             const sid=s?s.id:'';
@@ -2360,6 +2361,27 @@
                 if(storyClear>rc) storyPush();          // 本地打得更远（离线/换设备前）：反向补传
             }).catch(()=>{});
         }
+        // ============ 电脑端主菜单：左上账号信息 + 左侧随机立体角色卡 ============
+        function renderPcMenuUser(){
+            const nm=document.getElementById('pcUserName');
+            if(!nm) return;
+            nm.textContent=authUser?displayName(authUser):'登录 / 注册';
+            setAvatarEl(document.getElementById('pcUserAvatar'),document.getElementById('pcUserAvatarFallback'),authUser?authUser.avatar:'');
+        }
+        function renderPcMenuRole(){
+            const card=document.getElementById('pcMenuCard');
+            if(!card) return;
+            const list=visibleRoles();
+            if(!list.length) return;
+            const role=list[Math.floor(Math.random()*list.length)];
+            const av=document.getElementById('pcMenuAvatar'), nm=document.getElementById('pcMenuName');
+            const hp=document.getElementById('pcMenuHp'), sk=document.getElementById('pcMenuSkill');
+            if(av) av.textContent=role.avatar||'🎴';
+            if(nm) nm.textContent=rn(role);
+            if(hp) hp.textContent='❤️ '+role.hp;
+            if(sk) sk.textContent=role.desc||'';
+            if(role.color) card.style.setProperty('--role-color',role.color); else card.style.removeProperty('--role-color');
+        }
         function displayName(u){ return u?(u.nickname||u.username):''; }
         function setAvatarEl(imgEl,fbEl,avatar){
             if(!imgEl) return;
@@ -2379,6 +2401,7 @@
             if(!authUser){
                 const fb=document.getElementById('friendBadge'); if(fb) fb.style.display='none';
             }
+            renderPcMenuUser();
             accSettingsFill();
         }
         function authErr(msg){ const el=document.getElementById('accErr'); if(el) el.textContent=msg||''; }
@@ -3556,6 +3579,14 @@
         });
 
         document.getElementById('btnAccount').addEventListener('click',()=>{ sfxClick(); authErr(''); authRender(); showScreen(document.getElementById('screenAccount')); });
+        // 电脑端左上角账号入口：已登录直接进账号设置，未登录进登录页
+        (function(){
+            const chip=document.getElementById('pcUserChip');
+            if(!chip) return;
+            const open=()=>{ sfxClick(); if(authUser){ accSettingsOpen(); } else { authErr(''); authRender(); showScreen(document.getElementById('screenAccount')); } };
+            chip.addEventListener('click',open);
+            chip.addEventListener('keydown',e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); open(); } });
+        })();
         document.getElementById('btnAccountBack').addEventListener('click',()=>{ sfxClick(); showScreen(document.getElementById('screenMenu')); });
         document.getElementById('btnAccTabLogin').addEventListener('click',()=>{ sfxClick(); authSetMode('login'); });
         document.getElementById('btnAccTabReg').addEventListener('click',()=>{ sfxClick(); authSetMode('reg'); });
@@ -3722,6 +3753,7 @@
         loadJoyLayout();
         initJoySettings();
         authInit();
+        renderPcMenuRole();
         canvas=document.getElementById('battleCanvas'); ctx=canvas.getContext('2d'); arenaSize=arenaTargetSize(); canvas.width=arenaSize; canvas.height=arenaSize;
         window.addEventListener('resize',()=>{ applyJoyLayout(); if(battleActive){ if(gameMode==='online') return; const s=arenaTargetSize(); if(s!==arenaSize){ const r=s/arenaSize; arenaSize=s; canvas.width=arenaSize; canvas.height=arenaSize; entities.forEach(e=>{e.x*=r;e.y*=r;}); projectiles.forEach(p=>{p.x*=r;p.y*=r;}); } } });
     })();
