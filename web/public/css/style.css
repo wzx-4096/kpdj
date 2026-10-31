@@ -566,3 +566,176 @@
 .room-role-grid.locked { pointer-events:none; opacity:0.55; }
 .net-badge { position:fixed; top:8px; left:50%; transform:translateX(-50%); z-index:60; background:rgba(10,12,24,0.88); border:1px solid rgba(255,255,255,0.2); color:#dfe; font-size:10px; padding:3px 10px; border-radius:20px; pointer-events:none; }
 
+/* ============================================================
+   电脑端专属 UI（鼠标 + 悬停设备自动启用，运行时打上 body.pc）
+   设计原则：宽屏统一栅格与最大宽度、多栏替代拉伸、悬停/焦点态、
+   8px 间距节奏、键盘可达性；手机端完全不受影响
+   ============================================================ */
+.pc-only { display:none; }
+body.pc { background:radial-gradient(1200px 720px at 50% -8%, #1b1d3a 0%, #101122 52%, #08080f 100%); overflow-y:auto; }
+body.pc .bg-particles { opacity:0.18; }
+body.pc .game-container { max-width:1280px; min-height:100vh; padding:32px clamp(24px,4vw,56px); gap:18px; justify-content:center; }
+body.pc .screen { gap:16px; }
+body.pc .game-title { font-size:30px !important; letter-spacing:4px; }
+body.pc .game-subtitle { font-size:16px; letter-spacing:8px; }
+body.pc ::-webkit-scrollbar { width:10px; height:10px; }
+body.pc ::-webkit-scrollbar-track { background:transparent; }
+body.pc ::-webkit-scrollbar-thumb { background:rgba(240,192,96,0.26); border-radius:8px; border:2px solid transparent; background-clip:content-box; }
+body.pc ::-webkit-scrollbar-thumb:hover { background:rgba(240,192,96,0.45); border:2px solid transparent; background-clip:content-box; }
+
+/* —— 按钮：桌面悬停 / 焦点 / 统一圆角 —— */
+body.pc .btn { border-radius:16px; padding:14px 26px; min-width:140px; transition:transform 0.18s cubic-bezier(0.2,0.9,0.3,1.2), filter 0.2s, box-shadow 0.2s; }
+body.pc .btn:hover { transform:translateY(-2px); filter:brightness(1.14); box-shadow:0 10px 26px rgba(0,0,0,0.5), 0 0 22px rgba(240,192,96,0.22); }
+body.pc .btn:active { transform:translateY(0) scale(0.96); }
+body.pc .btn-danger:hover { box-shadow:0 10px 26px rgba(0,0,0,0.45), 0 0 22px rgba(231,76,60,0.3); }
+body.pc .btn-success:hover { box-shadow:0 10px 26px rgba(0,0,0,0.45), 0 0 22px rgba(92,184,92,0.3); }
+body.pc .btn-info:hover { box-shadow:0 10px 26px rgba(0,0,0,0.45), 0 0 22px rgba(77,166,255,0.3); }
+body.pc .btn-warning:hover { box-shadow:0 10px 26px rgba(0,0,0,0.45), 0 0 22px rgba(240,160,64,0.3); }
+body.pc .btn:focus-visible, body.pc .set-item:focus-visible, body.pc .light-toggle:focus-visible, body.pc .card-display:focus-visible { outline:2px solid #fff; outline-offset:3px; }
+
+/* —— 主菜单：居中启动面板 + 三列快捷入口 —— */
+body.pc #screenMenu.active {
+    display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px 16px;
+    width:min(100%,860px); padding:44px 48px 36px; border-radius:26px;
+    background:linear-gradient(180deg,rgba(28,30,54,0.78) 0%,rgba(13,14,26,0.9) 100%);
+    border:1px solid rgba(240,192,96,0.22);
+    box-shadow:0 30px 90px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.06);
+}
+body.pc #screenMenu.active > :nth-child(1) { grid-column:1/-1; font-size:46px !important; letter-spacing:6px; }
+body.pc #screenMenu.active > :nth-child(2) { grid-column:1/-1; }
+body.pc #screenMenu.active > :nth-child(3) { display:none; }
+body.pc #screenMenu.active > #btnStartGame { grid-column:1/-1; height:64px; font-size:20px; border-radius:18px; color:#15152a; border-color:#ffe9b0; background:linear-gradient(135deg,#f8dc96,#e3ab3c); box-shadow:0 12px 32px rgba(240,192,96,0.3); }
+body.pc #screenMenu.active > #btnStartGame:hover { transform:translateY(-3px); filter:brightness(1.06); box-shadow:0 16px 40px rgba(240,192,96,0.42); }
+body.pc #screenMenu .btn-sm { height:52px; font-size:14px; }
+body.pc #screenMenu #versionLabel { grid-column:1/-1; font-size:12px !important; color:#8a93b8 !important; margin-top:2px; }
+
+/* —— 模式选择：三列大按钮卡片 —— */
+body.pc #screenMode.active {
+    display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px;
+    width:min(100%,980px); padding:36px 40px 30px; border-radius:24px;
+    background:linear-gradient(180deg,rgba(28,30,54,0.7) 0%,rgba(13,14,26,0.86) 100%);
+    border:1px solid rgba(240,192,96,0.18);
+    box-shadow:0 26px 80px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.05);
+}
+body.pc #screenMode.active > .game-title { grid-column:1/-1; font-size:34px !important; }
+body.pc #screenMode .btn { width:100%; height:88px; font-size:18px; border-radius:18px; }
+body.pc #screenMode #btnBackToMenu { grid-column:1/-1; justify-self:center; width:220px; height:52px; font-size:14px; margin-top:4px; }
+
+/* —— 选角色 / 手动选人：自适应卡片栅格 —— */
+body.pc #screenFreeSelect, body.pc #screenManualSelect, body.pc #screenBRSelect { width:100%; max-width:1120px; gap:14px; }
+body.pc #freeSelectionInfo, body.pc #manualSelectionInfo, body.pc #brSelectionInfo { font-size:14px !important; color:#b9c2dc !important; }
+body.pc #freeRoleList, body.pc #manualRoleList, body.pc #brRoleList {
+    display:grid !important; grid-template-columns:repeat(auto-fill,minmax(150px,1fr));
+    gap:16px !important; width:100% !important; max-width:1080px; align-items:stretch; margin-top:4px;
+}
+body.pc :is(#freeRoleList,#manualRoleList,#brRoleList) .card-display { width:auto !important; flex:1 1 auto; padding:16px 12px; border-radius:16px; }
+body.pc :is(#freeRoleList,#manualRoleList,#brRoleList) .card-display:hover { transform:translateY(-5px); border-color:var(--gold); box-shadow:0 14px 32px rgba(0,0,0,0.55), 0 0 24px rgba(240,192,96,0.2); }
+body.pc :is(#freeRoleList,#manualRoleList,#brRoleList) .card-avatar { font-size:46px; }
+body.pc :is(#freeRoleList,#manualRoleList,#brRoleList) .card-name { font-size:15px; }
+body.pc :is(#freeRoleList,#manualRoleList,#brRoleList) .card-hp { font-size:11px; }
+body.pc :is(#freeRoleList,#manualRoleList,#brRoleList) .card-skill-info { font-size:10px; height:40px !important; }
+
+/* —— 设置 / 开发者选项：两栏对齐 —— */
+body.pc #screenSettings.active, body.pc #screenDev.active { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; width:min(100%,780px); }
+body.pc #screenSettings.active > .game-title, body.pc #screenDev.active > .game-title { grid-column:1/-1; }
+body.pc #screenSettings.active > .modal-box, body.pc #screenDev.active > .modal-box { grid-column:1/-1; width:100% !important; max-width:none !important; }
+body.pc #screenSettings .set-item, body.pc #screenDev .set-item { width:100%; max-width:none; margin:0; height:62px; }
+body.pc #screenSettings .set-item:hover, body.pc #screenDev .set-item:hover { border-color:var(--gold); background:#232d52; transform:translateY(-1px); }
+body.pc #screenSettings #btnSettingsBack, body.pc #screenDev #btnDevBack { grid-column:1/-1; justify-self:center; width:220px; margin-top:6px; }
+body.pc #btnJoySetting { display:none; }
+body.pc #pcKeyHint { display:flex; grid-column:1/-1; cursor:default; }
+body.pc #pcKeyHint:hover { border-color:var(--border); background:var(--panel); transform:none; }
+
+/* —— 沉浸光感 —— */
+body.pc #screenLight .modal-box { width:min(100%,480px) !important; max-width:none !important; }
+body.pc #screenDevStory .modal-box { width:min(100%,560px) !important; max-width:560px !important; max-height:70vh; }
+
+/* —— 账号相关面板 —— */
+body.pc #screenAccount .modal-box { width:min(100%,440px) !important; max-width:440px !important; }
+body.pc #screenAccSettings .modal-box { width:min(100%,600px) !important; max-width:600px !important; max-height:78vh; }
+body.pc #accName { font-size:24px !important; }
+
+/* —— 客服 / 好友 / 聊天：加宽加高，输入区留白 —— */
+body.pc #screenSupport .modal-box, body.pc #screenFriends .modal-box, body.pc #screenChat .modal-box { width:min(100%,640px) !important; max-width:640px !important; height:min(72vh,700px) !important; }
+body.pc #csInput, body.pc #chatInput { font-size:15px; }
+body.pc .msg-bubble, body.pc .cs-msg { font-size:14px; }
+
+/* —— 联机房间 —— */
+body.pc .room-box { width:min(100%,760px); max-width:760px; height:min(74vh,720px); padding:16px 20px; }
+body.pc .room-code { font-size:28px; letter-spacing:4px; }
+body.pc .room-player { padding:12px 10px; }
+body.pc .room-avatar { width:56px; height:56px; font-size:24px; }
+body.pc .room-name { font-size:13px; }
+body.pc .room-vs { font-size:18px; }
+body.pc .room-role-grid .card-display { transform:none; }
+body.pc #btnRoomLeave { width:220px; }
+
+/* —— 关于：左更新日志 + 右侧玩法/版本两栏 —— */
+body.pc #screenAbout.active { display:grid; grid-template-columns:minmax(0,1.4fr) minmax(0,1fr); gap:18px; width:min(100%,1060px); align-items:start; }
+body.pc #screenAbout.active > .game-title { grid-column:1/-1; }
+body.pc #screenAbout .modal-box { width:100% !important; max-width:none !important; max-height:64vh; }
+body.pc #screenAbout.active > :nth-child(2) { grid-row:span 2; max-height:76vh; }
+body.pc #screenAbout #btnAboutBack { grid-column:1/-1; justify-self:center; width:220px; }
+
+/* —— 故事地图：固定全屏、居中限宽 —— */
+body.pc #screenStory { position:fixed; inset:0; z-index:5; padding:0; background:#0d0d1a; }
+body.pc #screenStory.active { display:flex; }
+body.pc .story-scroll { max-width:900px; height:100vh; height:100dvh; margin:0 auto; }
+body.pc .story-top { padding:16px 12px; }
+body.pc .story-top b { font-size:20px !important; }
+body.pc #screenStoryTest #storyTestIntro { max-width:720px; width:100%; font-size:14px !important; }
+body.pc #screenStoryTest .game-title { margin-top:8px; }
+
+/* —— 战斗：大场地 + 顶部信息条 + 居中对齐 —— */
+body.pc #screenBattle { max-width:1120px; gap:14px; }
+body.pc .battle-hud { max-width:960px; max-height:none; gap:10px; }
+body.pc .hud-card { min-width:104px; padding:8px 12px; border-radius:12px; }
+body.pc .hud-card b { font-size:12px !important; }
+body.pc .battle-canvas { border-width:4px; border-radius:18px; box-shadow:0 0 60px rgba(240,192,96,0.18), 0 30px 60px rgba(0,0,0,0.5); }
+body.pc .battle-arena-wrapper { padding:4px 0 2px; }
+body.pc #screenBattle .battle-arena-wrapper + div { gap:14px !important; }
+body.pc #battleResult { font-size:18px !important; }
+body.pc #kbHint { font-size:12px !important; padding:8px 18px !important; border-radius:999px; border:1px solid rgba(255,255,255,0.14); background:rgba(255,255,255,0.06) !important; max-width:720px; }
+
+/* —— 抽卡 —— */
+body.pc .draw-card { width:168px; height:216px; border-radius:18px; }
+body.pc .draw-card .card-back { font-size:44px; }
+body.pc #screenDualDraw .game-title { font-size:26px !important; }
+
+/* —— 三合一：更宽的扇形台面 —— */
+body.pc #screenTri.active { max-width:700px; padding:28px 32px 24px; border-radius:24px; background:linear-gradient(180deg,rgba(28,30,54,0.7),rgba(13,14,26,0.86)); border:1px solid rgba(240,192,96,0.18); }
+body.pc .tri-slots { max-width:100%; }
+body.pc .tri-fan { max-width:100%; min-height:260px; }
+
+/* —— 结算 / 决斗全屏画面适度放大 —— */
+body.pc .vs-card { width:170px; }
+body.pc .vs-avatar { font-size:58px; }
+body.pc .vs-name { font-size:16px; }
+body.pc .vs-logo { font-size:76px; }
+body.pc .di-card { width:170px; }
+body.pc .di-emoji { font-size:64px; }
+body.pc .iv-card { width:min(90vw,430px); padding:30px 28px; }
+body.pc .sr-face { font-size:96px; }
+body.pc .vic-avatar { font-size:64px; padding:20px 34px; }
+
+/* —— 剧情场景：宽屏房间 + 宽屏对话框 —— */
+body.pc .scene-stage { max-width:1080px; }
+body.pc .dlg-box { max-width:1080px; flex-basis:160px; height:160px; padding:14px 26px 10px; }
+body.pc .dlg-text { font-size:17px; height:70px; }
+body.pc .dlg-speaker b { font-size:15px; }
+
+/* —— 窄窗口下的电脑端降级（仍是桌面交互，只是减少栏数） —— */
+@media (max-width:960px) {
+    body.pc .game-container { padding:20px 18px; }
+    body.pc #screenMenu.active { grid-template-columns:repeat(2,minmax(0,1fr)); padding:28px 26px 24px; }
+    body.pc #screenMenu.active > .game-title { font-size:36px !important; }
+    body.pc #screenMode.active { grid-template-columns:repeat(2,minmax(0,1fr)); padding:24px 22px; }
+    body.pc #screenMode .btn { height:74px; font-size:16px; }
+    body.pc #screenSettings.active, body.pc #screenDev.active { grid-template-columns:1fr; }
+    body.pc #screenSettings .set-item, body.pc #screenDev .set-item { grid-column:1/-1; }
+    body.pc #screenAbout.active { grid-template-columns:1fr; }
+    body.pc #screenAbout.active > :nth-child(2) { grid-row:auto; max-height:64vh; }
+    body.pc #screenSupport .modal-box, body.pc #screenFriends .modal-box, body.pc #screenChat .modal-box { height:min(66vh,560px) !important; }
+}
+
+

@@ -288,10 +288,13 @@
                 const card=document.createElement('div');
                 card.className='card-display'; card.style.cssText='cursor:pointer;width:104px;flex:none;';
                 card.dataset.roleId=role.id;
+                // 键盘可达：Tab 聚焦、回车/空格选中（电脑端操作）
+                card.setAttribute('role','button'); card.setAttribute('tabindex','0');
                 card.innerHTML=`<span class="card-avatar">${role.avatar}</span><div class="card-name">${rn(role)}</div><div class="card-hp">❤️ ${role.hp}</div><div class="card-skill-info" style="height:34px;overflow:hidden;">${role.desc}</div>`;
                 card.style.animationDelay=(ROLES.indexOf(role)*0.04)+'s';
                 card.classList.add('card-in');
                 card.addEventListener('click',()=>onPick(card,role));
+                card.addEventListener('keydown',(e)=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); onPick(card,role); } });
                 listEl.appendChild(card);
             });
         }
@@ -1051,8 +1054,8 @@
                 c1.style.display='none'; c2.style.display='none'; multi.style.display='block';
                 const storyVs=(gameMode==='storyduel');
                 word.textContent=storyVs?'VS':'大乱斗'; word.classList.add('small3');
-                const N=roles.length, maxW=Math.min(window.innerWidth*0.86,400), half=Math.sin(Math.PI/N);
-                let cw=N<=4?120:N<=6?96:80;
+                const N=roles.length, pcVs=IS_PC, maxW=Math.min(window.innerWidth*0.86,pcVs?560:400), half=Math.sin(Math.PI/N);
+                let cw=pcVs?(N<=4?150:N<=6?118:96):(N<=4?120:N<=6?96:80);
                 const need=cw/(2*half)+cw/2;
                 if(need*2>maxW) cw=Math.max(56,cw*(maxW/2)/need);
                 const R=cw/(2*half);
@@ -1099,11 +1102,17 @@
         }
 
         // ============ 战斗初始化 ============
+        // 场地尺寸：电脑端给更大的方形场地（至少 440，避免矮窗口比手机还小）；手机保持 380；联机固定 360 保证两端坐标一致
+        function arenaTargetSize(){
+            if(gameMode==='online') return 360;
+            const cap=IS_PC?Math.max(440,Math.min(680,Math.round(window.innerHeight*0.62))):380;
+            return Math.floor(Math.min(window.innerWidth*0.9,cap));
+        }
         function initBattle(roleList){
             stopBattle(); initAudio(); battleActive=true; projectiles=[]; particles=[]; smokes=[]; foods=[]; foodTimer=performance.now()+5000; hudSignature='';
             _lastUpdateTs=0;
             // 联机固定 360，保证两台设备坐标/碰撞完全一致（否则双方场地尺寸不同会互相错位）
-            arenaSize=gameMode==='online'?360:Math.floor(Math.min(window.innerWidth*0.9,380));
+            arenaSize=arenaTargetSize();
             canvas=document.getElementById('battleCanvas'); canvas.width=arenaSize; canvas.height=arenaSize; ctx=canvas.getContext('2d');
             entities=[];
             roleList.forEach((role,i)=>{
@@ -2117,6 +2126,16 @@
 
         // ============ 电脑端检测（主指针为鼠标+可悬停 → 键盘鼠标操控；手机/平板走摇杆） ============
         const IS_PC=(function(){ try{ return window.matchMedia('(pointer:fine)').matches&&window.matchMedia('(hover:hover)').matches; }catch(e){ return !(('ontouchstart' in window)||navigator.maxTouchPoints>0); } })();
+        // ============ 电脑端界面自动切换（鼠标+悬停设备 → body.pc 宽屏桌面布局；触屏设备保持原样） ============
+        const PC_UI_MQ=window.matchMedia('(pointer:fine) and (hover:hover)');
+        function applyPcUi(){
+            const on=PC_UI_MQ.matches;
+            document.body.classList.toggle('pc',on);
+            document.documentElement.classList.toggle('pc',on);
+        }
+        applyPcUi();
+        try{ PC_UI_MQ.addEventListener('change',applyPcUi); }catch(e){ try{ PC_UI_MQ.addListener(applyPcUi); }catch(_){} }
+
         const mouseAim={x:1,y:0,on:false};
 
         // ============ 键盘控制（手动对战） ============
@@ -3691,12 +3710,18 @@
         document.getElementById('drawCard2').addEventListener('click',()=>drawCard(2));
 
         // ============ 初始化 ============
+        // 设置项本身是 div：补上键盘可达（Tab 聚焦、回车/空格触发），电脑端操作更顺手
+        document.querySelectorAll('.set-item:not(#pcKeyHint)').forEach(el=>{
+            if(el.hasAttribute('tabindex')) return;
+            el.setAttribute('role','button'); el.setAttribute('tabindex','0');
+            el.addEventListener('keydown',(e)=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); el.click(); } });
+        });
         (function createBg(){ const c=document.getElementById('bgParticles'); for(let i=0;i<25;i++){ const d=document.createElement('div'); d.className='bg-particle'; d.style.width=d.style.height=(2+Math.random()*3)+'px'; d.style.left=Math.random()*100+'%'; d.style.animationDuration=(5+Math.random()*10)+'s'; d.style.animationDelay=Math.random()*8+'s'; d.style.background=['#f0c060','#ff6b8a','#7dbfff','#c8a0ff','#00aaff'][Math.floor(Math.random()*5)]; c.appendChild(d); } })();
         initLightSense();
         initJoysticks();
         loadJoyLayout();
         initJoySettings();
         authInit();
-        canvas=document.getElementById('battleCanvas'); ctx=canvas.getContext('2d'); arenaSize=Math.floor(Math.min(window.innerWidth*0.9,380)); canvas.width=arenaSize; canvas.height=arenaSize;
-        window.addEventListener('resize',()=>{ applyJoyLayout(); if(battleActive){ if(gameMode==='online') return; const s=Math.floor(Math.min(window.innerWidth*0.9,380)); if(s!==arenaSize){ const r=s/arenaSize; arenaSize=s; canvas.width=arenaSize; canvas.height=arenaSize; entities.forEach(e=>{e.x*=r;e.y*=r;}); projectiles.forEach(p=>{p.x*=r;p.y*=r;}); } } });
+        canvas=document.getElementById('battleCanvas'); ctx=canvas.getContext('2d'); arenaSize=arenaTargetSize(); canvas.width=arenaSize; canvas.height=arenaSize;
+        window.addEventListener('resize',()=>{ applyJoyLayout(); if(battleActive){ if(gameMode==='online') return; const s=arenaTargetSize(); if(s!==arenaSize){ const r=s/arenaSize; arenaSize=s; canvas.width=arenaSize; canvas.height=arenaSize; entities.forEach(e=>{e.x*=r;e.y*=r;}); projectiles.forEach(p=>{p.x*=r;p.y*=r;}); } } });
     })();
