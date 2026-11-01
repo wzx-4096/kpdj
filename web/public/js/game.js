@@ -2531,6 +2531,15 @@
         function csReply(text){
             const q=(text||'').trim();
             if(/密码|password|暗号|口令|开发|入口/.test(q)){ csThinkThen('114514'); return; }
+            if(CS_LZ_RE.test(q)){
+                const lzPool=[
+                    '嘉泽战歌，启动！🎵 呼噜睡侠·李嘉泽打鼾Z💤 冷却4秒，Z字弹3发各15伤害～',
+                    '嘉泽战歌已为你播放🎵 呼噜睡侠的 Z 字弹已经上膛，想了解他哪方面的资料？',
+                    '说到嘉泽我可就醒了！🎵 呼噜睡侠·李嘉泽：别吵醒我，除非你扛得住 3 发 Z 字弹～'
+                ];
+                csThinkThen(lzPool[Math.floor(Math.random()*lzPool.length)]);
+                return;
+            }
             const pool=[
                 '好的，您的建议已经记录下来了，我正在反馈给作者，感谢您对游戏的支持！😊',
                 '收到！已经帮您把这个问题反馈给作者了，作者会尽快查看处理，感谢支持～',
