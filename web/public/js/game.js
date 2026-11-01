@@ -2641,13 +2641,11 @@
             '卡牌对决，启动！',
             '今天的运气值：满格'
         ];
-        let pcSplashFirst=true;
         function renderPcSplash(){
             const el=document.getElementById('pcSplash');
             if(!el) return;
             let text;
-            if(pcSplashFirst){ text=PC_SPLASHES[0]; pcSplashFirst=false; }
-            else do{ text=PC_SPLASHES[Math.floor(Math.random()*PC_SPLASHES.length)]; }while(text===el.textContent && PC_SPLASHES.length>1);
+            do{ text=PC_SPLASHES[Math.floor(Math.random()*PC_SPLASHES.length)]; }while(text===el.textContent && PC_SPLASHES.length>1);
             el.textContent=text;
             el.style.animation='none'; void el.offsetWidth; el.style.animation='';   // 重新触发脉动
         }

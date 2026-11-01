@@ -625,11 +625,11 @@ body.pc #pcMenuTitle {
 body.pc .pc-title-text { position:relative; display:inline-block; }
 /* 我的世界同款闪烁标语：黄色描边字、倾斜、持续脉动 */
 body.pc #pcSplash {
-    position:absolute; left:calc(100% + 14px); top:2px;
+    position:absolute; left:calc(100% - 8px); top:calc(100% - 18px);
     display:inline-block; width:max-content; white-space:nowrap;
     font-size:clamp(11px,1.1vw,16px); font-weight:900; letter-spacing:0.5px;
     color:#ffef4a; line-height:1.1; text-align:left; pointer-events:none;
-    --splash-rot:-14deg;
+    --splash-rot:-18deg;
     text-shadow:2px 2px 0 #33260a, -1px -1px 0 #33260a, 1px -1px 0 #33260a, -1px 1px 0 #33260a, 0 0 16px rgba(255,232,90,0.75);
     animation:pcSplashBob 0.5s ease-in-out infinite alternate;
     will-change:transform;
@@ -842,7 +842,7 @@ body.pc .dlg-speaker b { font-size:15px; }
     body.pc .pc-card-name { font-size:20px; letter-spacing:2px; }
     body.pc .pc-card-skill { display:none; }
     body.pc #screenMenu .menu-actions { grid-column:1; grid-row:3; max-width:560px; }
-    body.pc #pcSplash { font-size:11px; left:calc(100% + 8px); }
+    body.pc #pcSplash { font-size:11px; left:calc(100% - 6px); top:calc(100% - 14px); }
     body.pc #screenMenu #btnSettings { width:44px; height:44px; }
     body.pc #screenMenu #btnSettings::before { width:20px; height:20px; }
     body.pc #screenMenu #versionLabel { grid-row:4; }
