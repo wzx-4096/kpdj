@@ -3262,8 +3262,8 @@
                 const item=b.closest('.skin-mini-item'); if(!item) return;
                 const id=item.dataset.id;
                 if(b.dataset.act==='del'){ skinDeleteLocal(id); return; }
-                if(b.dataset.act==='unpub'){ skinUnpublish(id); return; }
                 const rec=skinFind(id); if(!rec) return;
+                if(b.dataset.act==='unpub'){ if(rec.publishedId) skinUnpublish(rec.publishedId); return; }
                 skinEquipRole(rec.roleId,b.dataset.act==='equip'?rec.id:'');
                 skinToast(b.dataset.act==='equip'?'已装备：'+rec.name:'已取消装备');
                 skinRefreshRoleSkins(); skinRefreshMenuRole(); sfxClick();
