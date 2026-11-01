@@ -247,11 +247,13 @@
 
         // ============ 界面导航 ============
         function showScreen(s){
-            ['screenMenu','screenMode','screenManualSelect','screenFreeSelect','screenDualDraw','screenVS','screenBattle','screenBRSelect','screenTri','screenVictory','screenSettings','screenDev','screenDevStory','screenLight','screenAbout','screenJoySettings','screenStory','screenStoryTest','screenStoryScene','screenDuelInvite','screenDuelIntro','screenStoryResult','screenSupport','screenAccount','screenAccSettings','screenFriends','screenChat','screenRoom'].forEach(id=>{
+            ['screenMenu','screenMode','screenManualSelect','screenFreeSelect','screenDualDraw','screenVS','screenBattle','screenBRSelect','screenTri','screenVictory','screenSettings','screenDev','screenDevStory','screenLight','screenAbout','screenJoySettings','screenStory','screenStoryTest','screenStoryScene','screenDuelInvite','screenDuelIntro','screenStoryResult','screenSupport','screenAccount','screenAccSettings','screenFriends','screenChat','screenRoom','screenSkinEdit','screenSkinMarket'].forEach(id=>{
                 const el=document.getElementById(id); if(el) el.classList.remove('active');
             });
             if(s) s.classList.add('active');
-            if(s && s.id==='screenMenu'){ renderPcMenuRole(); renderPcSplash(); }
+            if(s && s.id==='screenMenu'){ skinCloseMore(); renderPcMenuRole(); renderPcSplash(); }
+            if(s && s.id==='screenSkinEdit') skinRefreshRoleSkins();
+            if(s && s.id==='screenSkinMarket') skinMarketRefresh();
             initAudio();
             // 每个模式一首曲子：战斗按模式细分，其余按界面
             const sid=s?s.id:'';
@@ -291,7 +293,7 @@
                 card.dataset.roleId=role.id;
                 // 键盘可达：Tab 聚焦、回车/空格选中（电脑端操作）
                 card.setAttribute('role','button'); card.setAttribute('tabindex','0');
-                card.innerHTML=`<span class="card-avatar">${role.avatar}</span><div class="card-name">${rn(role)}</div><div class="card-hp">❤️ ${role.hp}</div><div class="card-skill-info" style="height:34px;overflow:hidden;">${role.desc}</div>`;
+                card.innerHTML=`<span class="card-avatar">${skinAvatarHtml(role,40)}</span><div class="card-name">${rn(role)}</div><div class="card-hp">❤️ ${role.hp}</div><div class="card-skill-info" style="height:34px;overflow:hidden;">${role.desc}</div>`;
                 card.style.animationDelay=(ROLES.indexOf(role)*0.04)+'s';
                 card.classList.add('card-in');
                 card.addEventListener('click',()=>onPick(card,role));
@@ -856,7 +858,7 @@
             const avatarEl=document.getElementById(num===1?'drawAvatar1':'drawAvatar2');
             const nameEl=document.getElementById(num===1?'drawName1':'drawName2');
             const pool=visibleRoles(); const role=pool[Math.floor(Math.random()*pool.length)];
-            if(avatarEl) avatarEl.textContent=role.avatar; // 提前填充内容，翻过90°后正面才可见
+            if(avatarEl) avatarEl.innerHTML=skinAvatarHtml(role,40); // 提前填充内容，翻过90°后正面才可见
             if(nameEl) nameEl.textContent=rn(role);
             if(cardEl) cardEl.classList.add('flipping');
             setTimeout(()=>{
@@ -908,7 +910,7 @@
         function triNewCard(slot){   // 建一张卡，内容按 slot 对应角色固定，永不改变
             const role=triRoleAt(slot), c=document.createElement('div');
             c.className='tri-card'; c.dataset.slot=String(slot);
-            c.innerHTML='<span class="tc-av">'+role.avatar+'</span><div class="tc-nm">'+rn(role)+'</div><div class="tc-hp">❤️ '+role.hp+'</div><div class="tc-sk">'+role.desc+'</div>';
+            c.innerHTML='<span class="tc-av">'+skinAvatarHtml(role,38)+'</span><div class="tc-nm">'+rn(role)+'</div><div class="tc-hp">❤️ '+role.hp+'</div><div class="tc-sk">'+role.desc+'</div>';
             c.style.opacity='0'; c.style.pointerEvents='none'; return c;
         }
         function syncTriDeck(){   // 逐槽重排：持久元素只改 transform/opacity → 平滑非线性位移动画
@@ -930,7 +932,7 @@
         }
         function triChipNode(role){   // 单个卡槽芯片：点击移除自己（增量增删，不重建整排→不重播动画）
             const s=document.createElement('div'); s.className='tri-slot'; s.title='点击移除';
-            s.innerHTML='<span class="ts-av">'+role.avatar+'</span><span class="ts-nm">'+rn(role)+'</span>';
+            s.innerHTML='<span class="ts-av">'+skinAvatarHtml(role,18)+'</span><span class="ts-nm">'+rn(role)+'</span>';
             s.addEventListener('click',()=>{
                 sfxClick();
                 const box=document.getElementById('triSlots');
@@ -1046,7 +1048,7 @@
             if(roles.length===2){
                 [[roles[0],'vsAvatar1','vsName1','vsHp1',c1],[roles[1],'vsAvatar2','vsName2','vsHp2',c2]].forEach(([role,aid,nid,hid,card])=>{
                     const a=document.getElementById(aid), n=document.getElementById(nid), h=document.getElementById(hid);
-                    if(a) a.textContent=role.avatar;
+                    if(a) a.innerHTML=skinAvatarHtml(role,46);
                     if(n) n.textContent=rn(role);
                     if(h) h.textContent='❤️ '+role.hp;
                     if(card){ card.style.borderColor=role.color; card.style.boxShadow='0 0 28px '+role.color+'66'; }
@@ -1181,7 +1183,7 @@
                     const label=ent.isEmperor?'讲解石':(gameMode==='storyduel'?(ent.isManual?'你':(storyMe&&ent.owner===storyMe.owner?'队友':'敌方')):(ent.owner==='player1'?'玩家1':(ent.owner==='player2'?'玩家2':'P'+(parseInt(ent.owner.slice(1),10)+1))));
                     const hpP=Math.max(0,(ent.hp/ent.maxHp)*100);
                     const danger=hpP<30?' danger':'';
-                    html+=`<div class="hud-card"><span style="font-size:16px;">${ent.role.avatar}</span> <b style="color:#fff;font-size:11px;">${rn(ent.role)}</b> <span style="color:#888;font-size:9px;">[${label}]</span><div class="hud-hp-bar"><div class="hud-hp-fill${danger}" style="width:${hpP}%;"></div></div><span style="font-size:9px;color:#f99;">${Math.ceil(Math.max(0,ent.hp))}/${ent.maxHp}</span></div>`;
+                    html+=`<div class="hud-card"><span style="font-size:16px;display:inline-flex;">${skinAvatarHtml(ent.role,16)}</span> <b style="color:#fff;font-size:11px;">${rn(ent.role)}</b> <span style="color:#888;font-size:9px;">[${label}]</span><div class="hud-hp-bar"><div class="hud-hp-fill${danger}" style="width:${hpP}%;"></div></div><span style="font-size:9px;color:#f99;">${Math.ceil(Math.max(0,ent.hp))}/${ent.maxHp}</span></div>`;
                 });
                 hud.innerHTML=html;
                 const cards=hud.querySelectorAll('.hud-card');
@@ -1844,7 +1846,7 @@
                     }
                 }else{
                     ctx.fillStyle=e.role.color; ctx.beginPath(); ctx.arc(e.x,e.y,e.size/2,0,Math.PI*2); ctx.fill();
-                    ctx.fillStyle='#fff'; ctx.font=`${e.size*0.55}px sans-serif`; ctx.textAlign='center'; ctx.fillText(e.role.avatar,e.x,e.y+1);
+                    if(!skinDrawEntity(ctx,e.role,e.x,e.y,e.size)){ ctx.fillStyle='#fff'; ctx.font=`${e.size*0.55}px sans-serif`; ctx.textAlign='center'; ctx.fillText(e.role.avatar,e.x,e.y+1); }
                 }
                 if(e.isManual && !e.isRemote && joySkill.active){
                     const sm=Math.hypot(joySkill.x,joySkill.y);
@@ -1938,16 +1940,20 @@
                     const winner = alive.find(e => !e.isEmperor) || alive[0];
                     const label = winner.isEmperor ? ('讲解石(' + (winner.summoner ? rn(winner.summoner.role) : '?') + ')') : ((gameMode==='dual'||gameMode==='online') ? (winner.owner==='player1'?'玩家1':'玩家2') : rn(winner.role));
                     if(resultEl) resultEl.textContent = `🏆 ${label} 获胜！`;
-                    showVictory(label+' 获胜！', winner.role.avatar, winner.role.color);
+                    showVictory(label+' 获胜！', winner.role, winner.role.color);
                 }
                 render(); updateHUD();
             }
         }
 
         // ============ 胜利结算（全局） ============
-        function showVictory(text, avatar, color){
+        function showVictory(text, roleOrAvatar, color){
             const a=document.getElementById('vicAvatar'), n=document.getElementById('vicName'), c=document.getElementById('vicConfetti');
-            if(a){ a.textContent=avatar; if(color){ a.style.borderColor=color; a.style.boxShadow='0 0 40px '+color+'88'; } }
+            if(a){
+                if(roleOrAvatar&&typeof roleOrAvatar==='object'&&roleOrAvatar.id) a.innerHTML=skinAvatarHtml(roleOrAvatar,88);
+                else a.textContent=roleOrAvatar;
+                if(color){ a.style.borderColor=color; a.style.boxShadow='0 0 40px '+color+'88'; }
+            }
             if(n) n.textContent=text;
             if(c){ c.innerHTML=''; const colors=['#f0c060','#ff6b8a','#66ccff','#90ee90','#c8a0ff']; for(let i=0;i<16;i++){ const s=document.createElement('span'); s.className='confetti'; s.style.left=(Math.random()*100)+'%'; s.style.background=colors[i%colors.length]; s.style.animationDelay=(Math.random()*0.8)+'s'; s.style.animationDuration=(1.6+Math.random()*1.4)+'s'; c.appendChild(s); } }
             bgmWish=/阵亡|同归于尽/.test(text)?'lose':'victory';
@@ -2610,7 +2616,7 @@
             const role=list[Math.floor(Math.random()*list.length)];
             const av=document.getElementById('pcMenuAvatar'), nm=document.getElementById('pcMenuName');
             const hp=document.getElementById('pcMenuHp'), sk=document.getElementById('pcMenuSkill');
-            if(av) av.textContent=role.avatar||'🎴';
+            if(av) av.innerHTML=skinAvatarHtml(role,84);
             if(nm) nm.textContent=rn(role);
             if(hp) hp.textContent='❤️ '+role.hp;
             if(sk) sk.textContent=role.desc||'';
@@ -2701,6 +2707,593 @@
             if(!imgEl) return;
             if(avatar){ imgEl.src=avatar; imgEl.style.display=''; if(fbEl) fbEl.style.display='none'; }
             else { imgEl.removeAttribute('src'); imgEl.style.display='none'; if(fbEl) fbEl.style.display=''; }
+        }
+
+        // ============ 角色皮肤系统（本地 IndexedDB + 市场接口） ============
+        const SKIN_COLORS=['#ffffff','#ff4d6d','#ff9f43','#ffe066','#5ce65c','#3dd6ff','#5b8cff','#b07dff','#ff7ad9','#2b2b35','#8a93b8','#00e5b0'];
+        const SKIN_DB_NAME='kpdjSkins', SKIN_STORE='skins', SKIN_EQUIP_KEY='skinEquip';
+        let skinDB=null, skinCache=[], skinEquipMap={}, skinImgCache={}, skinEditRole=null;
+        let skinDoc=null, skinDctx=null, skinTool='brush', skinColor=SKIN_COLORS[0], skinLineWidth=10;
+        let skinUndoStack=[], skinRedoStack=[], skinDrawing=false, skinLastPt=null;
+        let skinSticker=null, skinStickerDrag=null;
+        let skinToastTimer=null, skinBusy=false, skinSearchTimer=null;
+        let skinMarketTab='market', skinMarketSort='new', skinMarketRole='all', skinMarketQ='', skinMarketList=[];
+
+        function skinEsc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+        function skinToast(msg){
+            const el=document.getElementById('skinToast'); if(!el) return;
+            el.textContent=msg||''; el.classList.add('show');
+            clearTimeout(skinToastTimer); skinToastTimer=setTimeout(()=>el.classList.remove('show'),1900);
+        }
+        function skinCloseMore(){ const p=document.getElementById('pcMorePanel'); if(p) p.classList.remove('open'); }
+
+        // ---------- 本地皮肤存储（IndexedDB） ----------
+        function skinDb(){
+            return new Promise((res,rej)=>{
+                if(skinDB) return res(skinDB);
+                try{
+                    const r=indexedDB.open(SKIN_DB_NAME,1);
+                    r.onupgradeneeded=()=>{ const db=r.result; if(!db.objectStoreNames.contains(SKIN_STORE)) db.createObjectStore(SKIN_STORE,{keyPath:'id'}); };
+                    r.onsuccess=()=>{ skinDB=r.result; res(skinDB); };
+                    r.onerror=()=>rej(r.error||new Error('本地存储不可用'));
+                }catch(e){ rej(e); }
+            });
+        }
+        function skinStore(mode){
+            return skinDb().then(db=>db.transaction(SKIN_STORE,mode).objectStore(SKIN_STORE));
+        }
+        function skinAll(){
+            return skinStore('readonly').then(st=>new Promise((res,rej)=>{
+                const q=st.getAll();
+                q.onsuccess=()=>res((q.result||[]).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)));
+                q.onerror=()=>rej(q.error||new Error('读取皮肤失败'));
+            }));
+        }
+        function skinPut(rec){
+            return skinStore('readwrite').then(st=>new Promise((res,rej)=>{
+                const q=st.put(rec);
+                q.onsuccess=()=>{ skinUpsertCache(rec); res(rec); };
+                q.onerror=()=>rej(q.error||new Error('保存皮肤失败'));
+            }));
+        }
+        function skinDel(id){
+            return skinStore('readwrite').then(st=>new Promise((res,rej)=>{
+                const q=st.delete(id);
+                q.onsuccess=()=>{
+                    skinCache=skinCache.filter(s=>s.id!==id);
+                    Object.keys(skinEquipMap).forEach(rid=>{ if(skinEquipMap[rid]===id) delete skinEquipMap[rid]; });
+                    skinSaveEquip(); res(true);
+                };
+                q.onerror=()=>rej(q.error||new Error('删除皮肤失败'));
+            }));
+        }
+        function skinUpsertCache(rec){
+            const i=skinCache.findIndex(s=>s.id===rec.id);
+            if(i>=0) skinCache[i]=rec; else skinCache.push(rec);
+            skinCache.sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+        }
+
+        // ---------- 装备映射 ----------
+        function skinReadEquip(){
+            try{ const raw=localStorage.getItem(SKIN_EQUIP_KEY); const o=raw?JSON.parse(raw):{}; skinEquipMap=(o&&typeof o==='object'&&!Array.isArray(o))?o:{}; }catch(e){ skinEquipMap={}; }
+        }
+        function skinSaveEquip(){ try{ localStorage.setItem(SKIN_EQUIP_KEY,JSON.stringify(skinEquipMap)); }catch(e){} }
+        function skinFind(id){ return skinCache.find(s=>s.id===id)||null; }
+        function skinEquipped(roleId){ const id=skinEquipMap[roleId]; return id?skinFind(id):null; }
+        function skinEquipRole(roleId,id){
+            if(!roleId) return;
+            if(id) skinEquipMap[roleId]=id; else delete skinEquipMap[roleId];
+            skinSaveEquip();
+        }
+
+        // ---------- 角色头像统一渲染 ----------
+        function skinAvatarHtml(role,px){
+            if(!role) return '';
+            const sk=skinEquipped(role.id);
+            const s=px||28;
+            if(sk && sk.img) return '<img class="skin-avatar" src="'+sk.img+'" alt="" style="width:'+s+'px;height:'+s+'px;">';
+            return role.avatar||'🎴';
+        }
+        function skinImg(id,url){
+            const c=skinImgCache[id];
+            if(c && c.__url===url) return c;
+            const im=new Image(); im.__url=url; im.src=url; skinImgCache[id]=im;
+            return im;
+        }
+        // 战斗画布：有皮肤且图片已加载时画圆形皮肤，返回 true；否则交由原 emoji 绘制
+        function skinDrawEntity(c,role,x,y,size){
+            if(!role) return false;
+            const sk=skinEquipped(role.id);
+            if(!sk||!sk.img) return false;
+            const im=skinImg(sk.id,sk.img);
+            if(!im.complete||!im.naturalWidth) return false;
+            c.save(); c.beginPath(); c.arc(x,y,size/2,0,Math.PI*2); c.clip();
+            c.drawImage(im,x-size/2,y-size/2,size,size); c.restore();
+            return true;
+        }
+
+        // ---------- 编辑器 ----------
+        function skinSetTool(t){
+            skinTool=t;
+            const br=document.getElementById('btnSkinBrush'), er=document.getElementById('btnSkinEraser');
+            if(br) br.classList.toggle('active',t==='brush');
+            if(er) er.classList.toggle('active',t==='eraser');
+        }
+        function skinSetColor(c){
+            skinColor=c; skinSetTool('brush');
+            document.querySelectorAll('#skinColorRow .skin-swatch').forEach(b=>b.classList.toggle('active',b.dataset.color===c));
+        }
+        function skinBuildColors(){
+            const row=document.getElementById('skinColorRow'); if(!row||row.dataset.built) return;
+            row.dataset.built='1';
+            SKIN_COLORS.forEach((c,i)=>{
+                const b=document.createElement('button'); b.type='button';
+                b.className='skin-swatch'+(i===0?' active':''); b.style.background=c; b.dataset.color=c;
+                b.addEventListener('click',()=>{ sfxClick(); skinSetColor(c); });
+                row.appendChild(b);
+            });
+        }
+        function skinBase(){
+            if(!skinDctx) return;
+            skinDctx.clearRect(0,0,512,512);
+            if(!skinEditRole) return;
+            skinDctx.save();
+            skinDctx.font='360px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif';
+            skinDctx.textAlign='center'; skinDctx.textBaseline='middle';
+            skinDctx.fillText(skinEditRole.avatar||'🎴',256,272);
+            skinDctx.restore();
+        }
+        function skinSnapshot(){
+            if(!skinDctx) return;
+            try{
+                skinUndoStack.push(skinDctx.getImageData(0,0,512,512));
+                if(skinUndoStack.length>30) skinUndoStack.shift();
+                skinRedoStack=[];
+            }catch(e){}
+        }
+        function skinRedraw(){
+            const cv=document.getElementById('skinCanvas'); if(!cv||!skinDoc) return;
+            const c=cv.getContext('2d');
+            c.clearRect(0,0,512,512);
+            c.drawImage(skinDoc,0,0);
+            if(skinSticker){
+                const s=skinStickerSize();
+                c.save(); c.globalAlpha=0.82;
+                c.drawImage(skinSticker.img,skinSticker.x-s/2,skinSticker.y-s/2,s,s);
+                c.strokeStyle='rgba(240,192,96,0.9)'; c.lineWidth=2; c.setLineDash([8,6]);
+                c.strokeRect(skinSticker.x-s/2,skinSticker.y-s/2,s,s);
+                c.restore(); c.setLineDash([]);
+            }
+        }
+        function skinStickerSize(){
+            if(!skinSticker) return 0;
+            return Math.max(24,Math.min(512,512*0.6*(skinSticker.scale||0.7)));
+        }
+        function skinPoint(e){
+            const cv=document.getElementById('skinCanvas'); const r=cv.getBoundingClientRect();
+            return { x:(e.clientX-r.left)*512/r.width, y:(e.clientY-r.top)*512/r.height };
+        }
+        function skinStroke(a,b){
+            if(!skinDctx||!a) return;
+            const c=skinDctx;
+            c.save(); c.lineCap='round'; c.lineJoin='round'; c.lineWidth=skinLineWidth;
+            if(skinTool==='eraser'){ c.globalCompositeOperation='destination-out'; c.strokeStyle='rgba(0,0,0,1)'; }
+            else c.strokeStyle=skinColor;
+            c.beginPath(); c.moveTo(a.x,a.y); c.lineTo(b.x,b.y); c.stroke(); c.restore();
+            skinRedraw();
+        }
+        function skinPointerDown(e){
+            if(!skinEditRole||!skinDctx) return;
+            e.preventDefault();
+            const cv=document.getElementById('skinCanvas');
+            if(cv.setPointerCapture) try{ cv.setPointerCapture(e.pointerId); }catch(err){}
+            const p=skinPoint(e);
+            if(skinSticker){ skinStickerDrag={dx:p.x-skinSticker.x,dy:p.y-skinSticker.y}; return; }
+            skinSnapshot(); skinDrawing=true; skinLastPt=p; skinStroke(p,p);
+        }
+        function skinPointerMove(e){
+            if(!skinDctx) return;
+            if(skinSticker&&skinStickerDrag){
+                e.preventDefault();
+                const p=skinPoint(e);
+                skinSticker.x=p.x-skinStickerDrag.dx; skinSticker.y=p.y-skinStickerDrag.dy;
+                skinRedraw(); return;
+            }
+            if(!skinDrawing) return;
+            e.preventDefault();
+            const p=skinPoint(e); skinStroke(skinLastPt,p); skinLastPt=p;
+        }
+        function skinPointerUp(){
+            if(skinStickerDrag){ skinStickerDrag=null; return; }
+            if(!skinDrawing) return;
+            skinDrawing=false; skinLastPt=null; skinRedraw();
+        }
+        function skinOpenPicker(){
+            const pick=document.getElementById('skinPickView'), edit=document.getElementById('skinEditView');
+            if(pick) pick.style.display=''; if(edit) edit.style.display='none';
+            skinEditRole=null;
+            const grid=document.getElementById('skinRoleGrid'); if(!grid) return;
+            grid.innerHTML='';
+            visibleRoles().forEach(role=>{
+                const sk=skinEquipped(role.id);
+                const card=document.createElement('button'); card.type='button'; card.className='skin-role-card';
+                card.innerHTML='<span class="sra">'+(sk?'<img src="'+sk.img+'" alt="">':(role.avatar||'🎴'))+'</span><span class="srn">'+rn(role)+'</span><span class="srf">'+(sk?'已装备皮肤':'未装备')+'</span>'+(sk?'<i class="skin-eq-dot"></i>':'');
+                card.addEventListener('click',()=>{ sfxClick(); skinOpenEditor(role); });
+                grid.appendChild(card);
+            });
+        }
+        function skinOpenEditor(role){
+            skinEditRole=role;
+            const pick=document.getElementById('skinPickView'), edit=document.getElementById('skinEditView');
+            if(pick) pick.style.display='none'; if(edit) edit.style.display='';
+            const av=document.getElementById('skinCurrentAvatar'), nm=document.getElementById('skinCurrentName');
+            if(av) av.innerHTML=skinAvatarHtml(role,38);
+            if(nm) nm.textContent=rn(role);
+            const nameEl=document.getElementById('skinName'); if(nameEl) nameEl.value='';
+            skinDoc=document.createElement('canvas'); skinDoc.width=512; skinDoc.height=512;
+            skinDctx=skinDoc.getContext('2d');
+            skinUndoStack=[]; skinRedoStack=[]; skinSticker=null; skinStickerDrag=null; skinDrawing=false;
+            skinBase();
+            skinSetTool('brush'); skinSetColor(SKIN_COLORS[0]);
+            skinLineWidth=10;
+            const sz=document.getElementById('skinSize'); if(sz) sz.value='10';
+            const szv=document.getElementById('skinSizeVal'); if(szv) szv.textContent='10';
+            const bar=document.getElementById('skinStickerBar'); if(bar) bar.style.display='none';
+            skinRedraw(); skinRefreshRoleSkins();
+        }
+        function skinOpenScreen(){
+            skinOpenPicker();
+            showScreen(document.getElementById('screenSkinEdit'));
+        }
+        function skinNameValue(role){
+            const el=document.getElementById('skinName');
+            const raw=el?String(el.value||'').trim():'';
+            return (raw.slice(0,16)||((rn(role)||'角色')+'皮肤')).slice(0,16);
+        }
+        async function skinSaveLocal(silent){
+            if(!skinEditRole||!skinDoc) return null;
+            let img='';
+            try{ img=skinDoc.toDataURL('image/webp',0.9); }catch(e){}
+            if(!img){ skinToast('保存失败：无法导出图片'); return null; }
+            const rec={ id:'sk_'+Date.now().toString(36)+Math.random().toString(36).slice(2,6), roleId:skinEditRole.id, name:skinNameValue(skinEditRole), img, createdAt:Date.now() };
+            try{
+                await skinPut(rec);
+                if(!silent) skinToast('已保存到本地：'+rec.name);
+                skinRefreshRoleSkins(); skinRefreshMenuRole();
+                return rec;
+            }catch(e){ skinToast('保存失败：本地存储不可用'); return null; }
+        }
+        async function skinPublishRecord(rec){
+            if(!rec) return;
+            if(!authToken){ skinToast('请先登录后再发布'); showScreen(document.getElementById('screenAccount')); return; }
+            if(skinBusy) return;
+            skinBusy=true;
+            const thumb=await new Promise(res=>{
+                const im=new Image();
+                im.onload=()=>{ const c=document.createElement('canvas'); c.width=160; c.height=160; const x=c.getContext('2d'); x.drawImage(im,0,0,160,160); let t=''; try{ t=c.toDataURL('image/webp',0.82); }catch(e){} res(t); };
+                im.onerror=()=>res(''); im.src=rec.img;
+            });
+            try{
+                const d=await authApi('/skins',{method:'POST',body:{roleId:rec.roleId,name:rec.name,img:rec.img,thumb}});
+                if(d&&d.skin){ rec.publishedId=d.skin.id; rec.authorName=d.skin.author_name||''; await skinPut(rec); skinToast('已发布到皮肤市场！'); }
+                else skinToast('发布失败');
+            }catch(e){ skinToast(e.message||'发布失败'); }
+            finally{ skinBusy=false; skinRefreshRoleSkins(); if(skinMarketTab!=='mine') skinMarketLoad(); }
+        }
+        async function skinPublishEditor(){
+            if(!skinEditRole||!skinDoc) return;
+            if(!authToken){ skinToast('请先登录后再发布'); showScreen(document.getElementById('screenAccount')); return; }
+            const local=await skinSaveLocal(true);
+            await skinPublishRecord(local);
+        }
+        async function skinRefreshRoleSkins(){
+            const box=document.getElementById('skinRoleSkins'); if(!box) return;
+            if(!skinEditRole){ box.innerHTML='<div class="skin-mini-empty">先选择一个角色</div>'; return; }
+            const list=skinCache.filter(s=>s.roleId===skinEditRole.id);
+            if(!list.length){ box.innerHTML='<div class="skin-mini-empty">还没有这个角色的皮肤，画一个吧</div>'; return; }
+            box.innerHTML=list.map(s=>{
+                const eq=skinEquipMap[s.roleId]===s.id;
+                return '<div class="skin-mini-item" data-id="'+s.id+'"><img src="'+s.img+'" alt=""><span class="skin-mini-name">'+skinEsc(s.name)+'</span>'
+                    +(s.publishedId?'<span style="font-size:9px;color:#5cb85c;flex-shrink:0;">已上架</span>':'')
+                    +'<button class="btn '+(eq?'btn-danger':'btn-success')+' btn-sm" data-act="'+(eq?'unequip':'equip')+'">'+(eq?'取消':'装备')+'</button>'
+                    +(s.publishedId?'<button class="btn btn-sm" data-act="unpub">下架</button>':'')
+                    +'<button class="btn btn-sm" data-act="del">删除</button></div>';
+            }).join('');
+        }
+        async function skinDeleteLocal(id){
+            const rec=skinFind(id); if(!rec) return;
+            if(!confirm('删除本地皮肤「'+rec.name+'」？')) return;
+            try{ await skinDel(id); skinToast('已删除'); skinRefreshRoleSkins(); skinRefreshMenuRole(); renderMine(); }catch(e){ skinToast('删除失败'); }
+        }
+        async function skinUnpublish(id){
+            if(!authToken){ skinToast('请先登录后再操作'); return; }
+            if(!confirm('确定从市场下架这款皮肤？')) return;
+            try{
+                await authApi('/skins/'+encodeURIComponent(id),{method:'DELETE'});
+                const rec=skinCache.find(s=>s.publishedId===id);
+                if(rec){ rec.publishedId=''; await skinPut(rec); }
+                skinToast('已下架'); skinRefreshRoleSkins(); skinMarketLoad();
+            }catch(e){ skinToast(e.message||'下架失败'); }
+        }
+        function skinRefreshMenuRole(){
+            if(document.getElementById('screenMenu')&&document.getElementById('screenMenu').classList.contains('active')) renderPcMenuRole();
+        }
+
+        // ---------- 皮肤市场 ----------
+        function skinBuildFilters(){
+            const box=document.getElementById('skinRoleFilter'); if(!box) return;
+            if(!box.dataset.listener){
+                box.dataset.listener='1';
+                box.addEventListener('click',e=>{
+                    const b=e.target.closest('.skin-filter-chip'); if(!b||!box.contains(b)) return;
+                    sfxClick();
+                    skinMarketRole=b.dataset.role;
+                    box.querySelectorAll('.skin-filter-chip').forEach(c=>c.classList.toggle('active',c===b));
+                    skinMarketLoad();
+                });
+            }
+            const need=visibleRoles().length;
+            if(box.dataset.built && box.dataset.count===String(need)) return;
+            box.dataset.built='1'; box.dataset.count=String(need); box.innerHTML='';
+            const mk=(id,label)=>{
+                const b=document.createElement('button'); b.type='button';
+                b.className='skin-filter-chip'+(id===skinMarketRole?' active':'');
+                b.dataset.role=id; b.textContent=label; return b;
+            };
+            box.appendChild(mk('all','全部角色'));
+            visibleRoles().forEach(r=>box.appendChild(mk(r.id,rn(r))));
+        }
+        function skinRoleLabel(id){ const r=ROLES.find(x=>x.id===id); return r?rn(r):(id||'角色'); }
+        function skinSetTab(t){
+            skinMarketTab=t;
+            const a=document.getElementById('btnSkinTabMarket'), b=document.getElementById('btnSkinTabMine');
+            if(a) a.classList.toggle('active',t==='market');
+            if(b) b.classList.toggle('active',t==='mine');
+            if(t==='mine') renderMine(); else skinMarketLoad();
+        }
+        function skinSetSort(s){
+            skinMarketSort=s;
+            document.querySelectorAll('#skinSortRow [data-sort]').forEach(b=>b.classList.toggle('active',b.dataset.sort===s));
+            if(skinMarketTab==='mine') renderMine(); else skinMarketLoad();
+        }
+        function skinMarketRefresh(){
+            skinBuildFilters();
+            if(skinMarketTab==='mine') renderMine(); else skinMarketLoad();
+        }
+        async function skinMarketLoad(){
+            if(skinMarketTab!=='market') return;
+            const grid=document.getElementById('skinMarketGrid'), empty=document.getElementById('skinMarketEmpty');
+            if(!grid) return;
+            if(empty) empty.style.display='none';
+            grid.innerHTML='<div class="skin-market-empty" style="grid-column:1/-1;">加载中…</div>';
+            const params=new URLSearchParams();
+            if(skinMarketRole!=='all') params.set('role',skinMarketRole);
+            const q=skinMarketQ.trim();
+            if(q){
+                params.set('q',q);
+                const ids=visibleRoles().filter(r=>rn(r).includes(q)||r.name.includes(q)||r.id.includes(q.toLowerCase())).map(r=>r.id);
+                if(ids.length) params.set('roles',ids.join(','));
+            }
+            params.set('sort',skinMarketSort); params.set('limit','200');
+            try{
+                const d=await authApi('/skins?'+params.toString());
+                skinMarketList=((d&&d.skins)||[]).filter(s=>!isRoleHidden(s.role));
+            }catch(e){
+                skinMarketList=[];
+                if(empty){ empty.style.display=''; empty.textContent=e.offline?'网络连接失败，暂时无法加载皮肤市场':'皮肤市场暂时无法加载：'+(e.message||'请稍后重试'); }
+            }
+            renderMarket();
+        }
+        function renderMarket(){
+            const grid=document.getElementById('skinMarketGrid'), empty=document.getElementById('skinMarketEmpty');
+            const count=document.getElementById('skinMarketCount');
+            if(!grid) return;
+            const list=skinMarketList;
+            if(count) count.textContent=list.length?('共 '+list.length+' 款'):'';
+            if(!list.length){
+                grid.innerHTML='';
+                if(empty){ empty.style.display=''; empty.textContent=skinMarketQ.trim()?'没有找到匹配的皮肤，换个代号或名字试试':'市场还没有皮肤，去「制作皮肤」发布第一款吧'; }
+                return;
+            }
+            if(empty) empty.style.display='none';
+            grid.innerHTML=list.map(s=>{
+                const local=!!skinFind(s.id);
+                const eq=skinEquipMap[s.role]===s.id;
+                const mine=!!(authUser&&s.author_pid===authUser.pid);
+                let acts='';
+                if(eq) acts+='<button class="btn btn-sm" data-act="unequip">取消装备</button>';
+                else if(local) acts+='<button class="btn btn-sm btn-success" data-act="equip">装备</button>';
+                else acts+='<button class="btn btn-sm btn-success" data-act="download">下载并装备</button>';
+                if(mine) acts+='<button class="btn btn-sm btn-danger" data-act="unpub">下架</button>';
+                return '<div class="skin-card" data-id="'+skinEsc(s.id)+'">'
+                    +'<div class="skin-card-thumb">'+(s.thumb?'<img src="'+s.thumb+'" alt="">':'')+'</div>'
+                    +'<div class="skin-card-title">'+skinEsc(s.name)+'</div>'
+                    +'<div class="skin-card-meta">'+skinEsc(skinRoleLabel(s.role))+' · '+skinEsc(s.author_name||'玩家')+'</div>'
+                    +'<div class="skin-card-dl">⬇ '+(s.downloads||0)+'</div>'
+                    +'<div class="skin-card-actions">'+acts+'</div></div>';
+            }).join('');
+        }
+        function renderMine(){
+            const grid=document.getElementById('skinMarketGrid'), empty=document.getElementById('skinMarketEmpty');
+            const count=document.getElementById('skinMarketCount');
+            if(!grid) return;
+            const list=skinCache.slice().sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+            if(count) count.textContent=list.length?('本地 '+list.length+' 款'):'';
+            if(!list.length){
+                grid.innerHTML=''; if(empty){ empty.style.display=''; empty.textContent='还没有自己的皮肤，点「制作皮肤」开始创作吧'; }
+                return;
+            }
+            if(empty) empty.style.display='none';
+            grid.innerHTML=list.map(s=>{
+                const eq=skinEquipMap[s.roleId]===s.id;
+                let acts='<button class="btn btn-sm '+(eq?'btn-danger':'btn-success')+'" data-act="'+(eq?'unequip':'equip')+'">'+(eq?'取消装备':'装备')+'</button>';
+                if(s.publishedId) acts+='<button class="btn btn-sm btn-danger" data-act="unpub">下架</button>';
+                else if(!s.source) acts+='<button class="btn btn-sm btn-info" data-act="pub">发布</button>';
+                acts+='<button class="btn btn-sm" data-act="del">删除</button>';
+                return '<div class="skin-card" data-id="'+skinEsc(s.id)+'">'
+                    +'<div class="skin-card-thumb"><img src="'+s.img+'" alt=""></div>'
+                    +'<div class="skin-card-title">'+skinEsc(s.name)+'</div>'
+                    +'<div class="skin-card-meta">'+skinEsc(skinRoleLabel(s.roleId))+' · '+skinEsc(s.publishedId?'已上架市场':(s.source?'来自市场':'仅本地'))+'</div>'
+                    +'<div class="skin-card-actions">'+acts+'</div></div>';
+            }).join('');
+        }
+        async function skinDownload(id){
+            if(!id||skinBusy) return;
+            const local=skinFind(id);
+            if(local){ skinEquipRole(local.roleId,local.id); skinToast('已装备：'+local.name); renderMarket(); skinRefreshMenuRole(); return; }
+            skinBusy=true; skinToast('正在下载皮肤…');
+            try{
+                const d=await authApi('/skins/'+encodeURIComponent(id));
+                if(d&&d.skin){
+                    const rec={ id:d.skin.id, roleId:d.skin.role, name:d.skin.name, img:d.skin.img, createdAt:Date.now(), source:'market', authorName:d.skin.author_name||'' };
+                    await skinPut(rec);
+                    skinEquipRole(rec.roleId,rec.id);
+                    skinToast('已下载并装备：'+rec.name);
+                    skinRefreshMenuRole();
+                }
+            }catch(e){ skinToast(e.message||'下载失败'); }
+            finally{ skinBusy=false; renderMarket(); renderMine(); }
+        }
+        function skinGridAction(e){
+            const b=e.target.closest('[data-act]'); if(!b) return;
+            const card=b.closest('.skin-card'); if(!card) return;
+            const id=card.dataset.id, act=b.dataset.act;
+            if(act==='download'){ sfxClick(); skinDownload(id); return; }
+            if(act==='unpub'){
+                if(skinMarketTab==='mine'){ const rec=skinFind(id); if(rec&&rec.publishedId) skinUnpublish(rec.publishedId); }
+                else skinUnpublish(id);
+                return;
+            }
+            const rec=skinFind(id);
+            if(act==='del'){ skinDeleteLocal(id); return; }
+            if(!rec) return;
+            if(act==='equip'){ sfxClick(); skinEquipRole(rec.roleId,rec.id); skinToast('已装备：'+rec.name); skinRefreshMenuRole(); renderMarket(); renderMine(); }
+            else if(act==='unequip'){ sfxClick(); skinEquipRole(rec.roleId,''); skinToast('已取消装备'); skinRefreshMenuRole(); renderMarket(); renderMine(); }
+            else if(act==='pub'){ sfxClick(); skinPublishRecord(rec); }
+        }
+        function skinReadLocalFile(file){
+            if(!file) return;
+            if(!/^image\/(png|jpeg|webp)$/.test(file.type)){ skinToast('只支持 PNG / JPG / WebP 图片'); return; }
+            const fr=new FileReader();
+            fr.onload=()=>{
+                const im=new Image();
+                im.onload=()=>{
+                    skinSticker={ img:im, x:256, y:256, scale:0.7 }; skinStickerDrag=null;
+                    const bar=document.getElementById('skinStickerBar'); if(bar) bar.style.display='flex';
+                    const sc=document.getElementById('skinStickerScale'); if(sc) sc.value='70';
+                    skinRedraw(); skinToast('拖动图片定位，点「放置」确认');
+                };
+                im.onerror=()=>skinToast('图片读取失败');
+                im.src=fr.result;
+            };
+            fr.onerror=()=>skinToast('文件读取失败');
+            fr.readAsDataURL(file);
+        }
+
+        // ---------- 皮肤系统初始化与按钮 ----------
+        let _skinBound=false;
+        function skinBind(){
+            if(_skinBound) return; _skinBound=true;
+            const on=(id,fn,ev)=>{ const el=document.getElementById(id); if(el) el.addEventListener(ev||'click',fn); };
+            on('btnMakeSkin',()=>{ sfxClick(); skinCloseMore(); skinOpenScreen(); });
+            on('btnSkinMarket',()=>{ sfxClick(); skinCloseMore(); showScreen(document.getElementById('screenSkinMarket')); });
+            on('pcMoreMakeSkin',()=>{ sfxClick(); skinCloseMore(); skinOpenScreen(); });
+            on('pcMoreSkinMarket',()=>{ sfxClick(); skinCloseMore(); showScreen(document.getElementById('screenSkinMarket')); });
+            on('btnPcMore',e=>{ e.stopPropagation(); sfxClick(); const p=document.getElementById('pcMorePanel'); if(p) p.classList.toggle('open'); });
+            document.addEventListener('click',e=>{
+                const p=document.getElementById('pcMorePanel'), b=document.getElementById('btnPcMore');
+                if(!p||!p.classList.contains('open')) return;
+                if(p.contains(e.target)||(b&&b.contains(e.target))) return;
+                p.classList.remove('open');
+            });
+            on('btnSkinPickBack',()=>{ sfxClick(); showScreen(document.getElementById('screenMenu')); });
+            on('btnSkinEditBack',()=>{ sfxClick(); skinOpenPicker(); });
+            on('btnSkinBrush',()=>{ sfxClick(); skinSetTool('brush'); });
+            on('btnSkinEraser',()=>{ sfxClick(); skinSetTool('eraser'); });
+            on('btnSkinUpload',()=>{ sfxClick(); const f=document.getElementById('skinFile'); if(f) f.click(); });
+            const sf=document.getElementById('skinFile');
+            if(sf) sf.addEventListener('change',e=>{ const f=e.target.files&&e.target.files[0]; skinReadLocalFile(f); e.target.value=''; });
+            const sk=document.getElementById('skinCanvas');
+            if(sk){
+                sk.addEventListener('pointerdown',skinPointerDown);
+                sk.addEventListener('pointermove',skinPointerMove);
+                sk.addEventListener('pointerup',skinPointerUp);
+                sk.addEventListener('pointercancel',skinPointerUp);
+                sk.addEventListener('pointerleave',skinPointerUp);
+                sk.addEventListener('contextmenu',e=>e.preventDefault());
+            }
+            const sz=document.getElementById('skinSize'), szv=document.getElementById('skinSizeVal');
+            if(sz) sz.addEventListener('input',()=>{ skinLineWidth=parseInt(sz.value,10)||10; if(szv) szv.textContent=''+skinLineWidth; });
+            on('btnSkinUndo',()=>{
+                if(!skinDctx||!skinUndoStack.length) return;
+                try{ skinRedoStack.push(skinDctx.getImageData(0,0,512,512)); const im=skinUndoStack.pop(); skinDctx.putImageData(im,0,0); skinRedraw(); }catch(e){}
+            });
+            on('btnSkinRedo',()=>{
+                if(!skinDctx||!skinRedoStack.length) return;
+                try{ skinUndoStack.push(skinDctx.getImageData(0,0,512,512)); const im=skinRedoStack.pop(); skinDctx.putImageData(im,0,0); skinRedraw(); }catch(e){}
+            });
+            on('btnSkinClear',()=>{
+                if(!skinDctx) return;
+                skinSnapshot(); skinBase(); skinSticker=null; skinStickerDrag=null;
+                const bar=document.getElementById('skinStickerBar'); if(bar) bar.style.display='none';
+                skinRedraw(); sfxClick();
+            });
+            on('btnSkinStickerApply',()=>{
+                if(!skinDctx||!skinSticker){ skinToast('还没有上传图片'); return; }
+                skinSnapshot();
+                const s=skinStickerSize();
+                skinDctx.drawImage(skinSticker.img,skinSticker.x-s/2,skinSticker.y-s/2,s,s);
+                skinSticker=null; skinStickerDrag=null;
+                const bar=document.getElementById('skinStickerBar'); if(bar) bar.style.display='none';
+                skinRedraw(); sfxClick();
+            });
+            on('btnSkinStickerCancel',()=>{
+                skinSticker=null; skinStickerDrag=null;
+                const bar=document.getElementById('skinStickerBar'); if(bar) bar.style.display='none';
+                skinRedraw(); sfxClick();
+            });
+            const ss=document.getElementById('skinStickerScale');
+            if(ss) ss.addEventListener('input',()=>{ if(skinSticker){ skinSticker.scale=(parseInt(ss.value,10)||70)/100; skinRedraw(); } });
+            on('btnSkinSave',()=>{ sfxClick(); skinSaveLocal(false); });
+            on('btnSkinPublish',()=>{ sfxClick(); skinPublishEditor(); });
+            const roleskins=document.getElementById('skinRoleSkins');
+            if(roleskins) roleskins.addEventListener('click',e=>{
+                const b=e.target.closest('[data-act]'); if(!b) return;
+                const item=b.closest('.skin-mini-item'); if(!item) return;
+                const id=item.dataset.id;
+                if(b.dataset.act==='del'){ skinDeleteLocal(id); return; }
+                if(b.dataset.act==='unpub'){ skinUnpublish(id); return; }
+                const rec=skinFind(id); if(!rec) return;
+                skinEquipRole(rec.roleId,b.dataset.act==='equip'?rec.id:'');
+                skinToast(b.dataset.act==='equip'?'已装备：'+rec.name:'已取消装备');
+                skinRefreshRoleSkins(); skinRefreshMenuRole(); sfxClick();
+            });
+            on('btnSkinTabMarket',()=>{ sfxClick(); skinSetTab('market'); });
+            on('btnSkinTabMine',()=>{ sfxClick(); skinSetTab('mine'); });
+            document.querySelectorAll('#skinSortRow [data-sort]').forEach(b=>b.addEventListener('click',()=>{ sfxClick(); skinSetSort(b.dataset.sort); }));
+            const search=document.getElementById('skinSearch');
+            if(search) search.addEventListener('input',()=>{
+                skinMarketQ=search.value||'';
+                clearTimeout(skinSearchTimer);
+                skinSearchTimer=setTimeout(()=>{ if(skinMarketTab==='market') skinMarketLoad(); },320);
+            });
+            const grid=document.getElementById('skinMarketGrid');
+            if(grid) grid.addEventListener('click',skinGridAction);
+            on('btnSkinMarketMake',()=>{ sfxClick(); skinOpenScreen(); });
+            on('btnSkinMarketBack',()=>{ sfxClick(); showScreen(document.getElementById('screenMenu')); });
+        }
+        async function skinInit(){
+            skinReadEquip();
+            skinBuildColors();
+            skinBuildFilters();
+            skinBind();
+            try{ skinCache=await skinAll(); }catch(e){ skinCache=[]; }
+            let changed=false;
+            Object.keys(skinEquipMap).forEach(rid=>{ if(!skinFind(skinEquipMap[rid])){ delete skinEquipMap[rid]; changed=true; } });
+            if(changed) skinSaveEquip();
+            Object.keys(skinEquipMap).forEach(rid=>{ const s=skinFind(skinEquipMap[rid]); if(s) skinImg(s.id,s.img); });
+            skinRefreshMenuRole();
+            if(skinEditRole) skinRefreshRoleSkins();
         }
         function authRender(){
             const btn=document.getElementById('btnAccount'); if(btn) btn.textContent=authUser?('👤 '+displayName(authUser)):'👤 登录 / 注册';
@@ -3674,10 +4267,10 @@
                 showVictory('同归于尽 💀','💀','#888888');
             }else if(winner==='player2'){
                 if(resultEl) resultEl.textContent='🏆 你获胜！';
-                showVictory('🏆 你获胜！',mine?mine.role.avatar:'🏆',mine?mine.role.color:'#f0c060');
+                showVictory('🏆 你获胜！',mine?mine.role:'🏆',mine?mine.role.color:'#f0c060');
             }else{
                 if(resultEl) resultEl.textContent='💀 你失败了';
-                showVictory('💀 你失败了',foe?foe.role.avatar:'💀',foe?foe.role.color:'#888888');
+                showVictory('💀 你失败了',foe?foe.role:'💀',foe?foe.role.color:'#888888');
             }
             onlineBadge('已结束');
             onlinePollStop();
@@ -4053,6 +4646,7 @@
         document.getElementById('btnRematch').addEventListener('click',rematch);
         document.getElementById('drawCard1').addEventListener('click',()=>drawCard(1));
         document.getElementById('drawCard2').addEventListener('click',()=>drawCard(2));
+        skinInit();
 
         // ============ 初始化 ============
         // 设置项本身是 div：补上键盘可达（Tab 聚焦、回车/空格触发），电脑端操作更顺手

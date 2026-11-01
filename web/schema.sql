@@ -98,3 +98,20 @@ CREATE TABLE IF NOT EXISTS story_progress (
   updated_at INTEGER NOT NULL
 );
 
+-- 角色皮肤市场：玩家发布的皮肤（img 为完整 WebP data URL，thumb 为列表缩略图）
+CREATE TABLE IF NOT EXISTS skins (
+  id          TEXT PRIMARY KEY,             -- sk_ + 随机串
+  role        TEXT NOT NULL,                -- 角色 id（wangyan / lijiaze …）
+  name        TEXT NOT NULL,                -- 皮肤名字（1-16 字）
+  img         TEXT NOT NULL,                -- 512×512 WebP data URL
+  thumb       TEXT NOT NULL,                -- 160×160 WebP data URL
+  author_pid  TEXT NOT NULL,
+  author_name TEXT NOT NULL,                -- 发布时的昵称/账号快照
+  downloads   INTEGER NOT NULL DEFAULT 0,
+  created_at  INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_skins_role ON skins(role);
+CREATE INDEX IF NOT EXISTS idx_skins_created ON skins(created_at);
+
+

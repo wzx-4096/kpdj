@@ -9,6 +9,7 @@
 <body>
 <div class="bg-particles" id="bgParticles"></div>
 <canvas id="pcTrailCanvas" aria-hidden="true"></canvas>
+<div id="skinToast"></div>
 <div class="game-container" id="gameContainer">
     <div class="screen active" id="screenMenu">
         <div class="pc-user-chip pc-only" id="pcUserChip" role="button" tabindex="0" title="账号设置">
@@ -31,6 +32,8 @@
         <div id="menuVsDeco" style="font-size:50px;margin:4px 0;">⚔️</div>
         <div class="menu-actions">
             <button class="btn" id="btnStartGame" style="font-size:18px;">🎮 开始游戏</button>
+            <button class="btn btn-sm skin-entry" id="btnMakeSkin">🎨 制作皮肤</button>
+            <button class="btn btn-sm skin-entry" id="btnSkinMarket">🛍️ 皮肤市场</button>
             <button class="btn btn-info btn-sm" id="btnShowRules">📜 游戏规则</button>
             <button class="btn btn-sm" id="btnSettings" aria-label="设置"><span class="settings-label">⚙️ 设置</span></button>
             <button class="btn btn-info btn-sm" id="btnFullscreen">⛶ 全屏</button>
@@ -38,7 +41,14 @@
             <button class="btn btn-info btn-sm" id="btnAccount">👤 登录 / 注册</button>
             <button class="btn btn-info btn-sm" id="btnFriends">👫 好友 <span class="badge" id="friendBadge" style="display:none;">0</span></button>
         </div>
-        <div style="color:#667;font-size:10px;" id="versionLabel">v9.25 · 电脑端闪烁标语</div>
+        <button class="pc-more-btn pc-only" id="btnPcMore" aria-label="更多" title="更多">
+            <span class="pc-more-dots"><i></i><i></i><i></i></span>
+        </button>
+        <div class="pc-more-panel pc-only" id="pcMorePanel">
+            <button class="btn btn-sm" id="pcMoreMakeSkin">🎨 制作皮肤</button>
+            <button class="btn btn-sm btn-info" id="pcMoreSkinMarket">🛍️ 皮肤市场</button>
+        </div>
+        <div style="color:#667;font-size:10px;" id="versionLabel">v9.26 · 角色皮肤市场</div>
     </div>
     <div class="screen" id="screenSupport">
         <div class="game-title" style="font-size:20px;">💬 在线客服</div>
@@ -317,6 +327,80 @@
             </div>
         </div>
         <button class="btn btn-sm" id="btnAboutBack">⬅ 返回</button>
+    </div>
+    <div class="screen" id="screenSkinEdit">
+        <div class="game-title" style="font-size:20px;">🎨 制作皮肤</div>
+        <div class="skin-pick-view" id="skinPickView">
+            <div class="skin-hint">选择一个角色，在它原本的表情上涂鸦或贴图</div>
+            <div class="skin-role-grid" id="skinRoleGrid"></div>
+            <button class="btn btn-sm" id="btnSkinPickBack">⬅ 返回主菜单</button>
+        </div>
+        <div class="skin-edit-view" id="skinEditView" style="display:none;">
+            <div class="skin-editor-main">
+                <div class="skin-canvas-stage">
+                    <canvas id="skinCanvas" width="512" height="512"></canvas>
+                    <div class="skin-sticker-bar" id="skinStickerBar" style="display:none;">
+                        <span>缩放</span>
+                        <input type="range" id="skinStickerScale" min="40" max="160" value="70">
+                        <button class="btn btn-sm btn-success" id="btnSkinStickerApply">放置</button>
+                        <button class="btn btn-sm" id="btnSkinStickerCancel">取消</button>
+                    </div>
+                </div>
+                <div class="skin-side">
+                    <div class="skin-current">
+                        <span class="skin-current-avatar" id="skinCurrentAvatar">🎴</span>
+                        <span class="skin-current-name" id="skinCurrentName">角色</span>
+                    </div>
+                    <div class="skin-tool-row">
+                        <button class="btn btn-sm skin-tool active" id="btnSkinBrush" data-tool="brush">🖌 画笔</button>
+                        <button class="btn btn-sm skin-tool" id="btnSkinEraser" data-tool="eraser">🧽 橡皮</button>
+                        <button class="btn btn-sm" id="btnSkinUpload">🖼 上传图片</button>
+                        <input type="file" id="skinFile" accept="image/png,image/jpeg,image/webp" style="display:none;">
+                    </div>
+                    <div class="skin-color-row" id="skinColorRow"></div>
+                    <div class="skin-size-row"><span>粗细</span><input type="range" id="skinSize" min="2" max="48" value="10"><span id="skinSizeVal">10</span></div>
+                    <div class="skin-tool-row">
+                        <button class="btn btn-sm" id="btnSkinUndo">↶ 撤销</button>
+                        <button class="btn btn-sm" id="btnSkinRedo">↷ 重做</button>
+                        <button class="btn btn-sm" id="btnSkinClear">🗑 清空</button>
+                    </div>
+                    <div class="skin-name-row"><input id="skinName" maxlength="16" placeholder="皮肤名字（1-16 字）" autocomplete="off"></div>
+                    <div class="skin-save-row">
+                        <button class="btn btn-sm btn-success" id="btnSkinSave">💾 保存到本地</button>
+                        <button class="btn btn-sm btn-warning" id="btnSkinPublish">🚀 发布到市场</button>
+                    </div>
+                    <div class="skin-mini-title">这个角色的皮肤</div>
+                    <div class="skin-mini-list" id="skinRoleSkins"></div>
+                    <button class="btn btn-sm" id="btnSkinEditBack">↩ 重新选角色</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="screen" id="screenSkinMarket">
+        <div class="game-title" style="font-size:20px;">🛍️ 皮肤市场</div>
+        <div class="skin-market-panel">
+            <div class="skin-market-head">
+                <div class="skin-tabs">
+                    <button class="btn btn-sm seg-btn active" id="btnSkinTabMarket" data-tab="market">皮肤市场</button>
+                    <button class="btn btn-sm seg-btn" id="btnSkinTabMine" data-tab="mine">我的皮肤</button>
+                </div>
+                <input id="skinSearch" class="acc-input skin-search" placeholder="搜索角色代号或皮肤名字" maxlength="24" autocomplete="off">
+            </div>
+            <div class="skin-filter-row" id="skinRoleFilter"></div>
+            <div class="skin-market-sub">
+                <div class="skin-sort-row" id="skinSortRow">
+                    <button class="btn btn-sm seg-btn active" data-sort="new">最新</button>
+                    <button class="btn btn-sm seg-btn" data-sort="hot">最热</button>
+                </div>
+                <span id="skinMarketCount"></span>
+            </div>
+            <div class="skin-market-grid" id="skinMarketGrid"></div>
+            <div class="skin-market-empty" id="skinMarketEmpty" style="display:none;"></div>
+        </div>
+        <div class="skin-market-actions">
+            <button class="btn btn-sm" id="btnSkinMarketMake">🎨 制作皮肤</button>
+            <button class="btn btn-sm" id="btnSkinMarketBack">⬅ 返回主菜单</button>
+        </div>
     </div>
     <div class="screen" id="screenMode">
         <div class="game-title" style="font-size:20px;">选择模式</div>
