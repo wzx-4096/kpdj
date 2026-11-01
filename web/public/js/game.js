@@ -251,7 +251,7 @@
                 const el=document.getElementById(id); if(el) el.classList.remove('active');
             });
             if(s) s.classList.add('active');
-            if(s && s.id==='screenMenu') renderPcMenuRole();
+            if(s && s.id==='screenMenu'){ renderPcMenuRole(); renderPcSplash(); }
             initAudio();
             // 每个模式一首曲子：战斗按模式细分，其余按界面
             const sid=s?s.id:'';
@@ -2137,6 +2137,240 @@
         applyPcUi();
         try{ PC_UI_MQ.addEventListener('change',applyPcUi); }catch(e){ try{ PC_UI_MQ.addListener(applyPcUi); }catch(_){} }
 
+        // ============ 电脑端鼠标拖尾（开发者选项 · 仅鼠标设备生效） ============
+        const PC_TRAIL_TYPES=['spark','lightning','fire','ribbon','bubble'];
+        let pcTrailOn=false, pcTrailType='spark', pcTrailRaf=0, pcTrailLastTs=0;
+        let pcTrailParts=[], pcTrailPts=[];
+        let pcTrailCv=null, pcTrailCtx=null, pcTrailDpr=1, pcTrailW=0, pcTrailH=0;
+        let pcTrailLastSpawn=0, pcTrailLastPoint=0;
+        let pcTrailLastX=0, pcTrailLastY=0, pcTrailHasLast=false;
+
+        function pcTrailResize(){
+            if(!pcTrailCv) return;
+            pcTrailDpr=Math.min(window.devicePixelRatio||1,2);
+            pcTrailW=window.innerWidth; pcTrailH=window.innerHeight;
+            pcTrailCv.width=Math.max(1,Math.floor(pcTrailW*pcTrailDpr));
+            pcTrailCv.height=Math.max(1,Math.floor(pcTrailH*pcTrailDpr));
+            pcTrailCtx.setTransform(pcTrailDpr,0,0,pcTrailDpr,0,0);
+            pcTrailCtx.clearRect(0,0,pcTrailW,pcTrailH);
+        }
+        function applyPcTrailSettings(){
+            let en='0', tp='spark';
+            try{ en=localStorage.getItem('trailOn')||'0'; tp=localStorage.getItem('trailType')||'spark'; }catch(e){}
+            pcTrailType=PC_TRAIL_TYPES.indexOf(tp)>=0?tp:'spark';
+            pcTrailOn=(en==='1') && PC_UI_MQ.matches && !!pcTrailCv;
+            const tg=document.getElementById('btnTrailToggle'); if(tg) tg.classList.toggle('on',pcTrailOn);
+            const wrap=document.getElementById('trailSegWrap'); if(wrap) wrap.style.opacity=pcTrailOn?'1':'0.45';
+            document.querySelectorAll('#trailSegWrap .seg-btn').forEach(b=>b.classList.toggle('active',b.dataset.trail===pcTrailType));
+            if(!pcTrailCv) return;
+            pcTrailCv.classList.toggle('trail-on',pcTrailOn);
+            pcTrailParts=[]; pcTrailPts=[]; pcTrailHasLast=false;
+            if(pcTrailOn){
+                if(!pcTrailW) pcTrailResize();
+                pcTrailLastTs=0;
+                if(!pcTrailRaf) pcTrailRaf=requestAnimationFrame(pcTrailFrame);
+            } else {
+                if(pcTrailRaf){ cancelAnimationFrame(pcTrailRaf); pcTrailRaf=0; }
+                pcTrailCtx.setTransform(pcTrailDpr,0,0,pcTrailDpr,0,0);
+                pcTrailCtx.clearRect(0,0,pcTrailW,pcTrailH);
+            }
+        }
+        function pcTrailSpawn(kind,x,y,count){
+            for(let i=0;i<count;i++){
+                if(pcTrailParts.length>240) pcTrailParts.shift();
+                if(kind==='fire'){
+                    pcTrailParts.push({kind:'fire',x:x+(Math.random()-0.5)*12,y:y+(Math.random()-0.5)*10,vx:(Math.random()-0.5)*1.1,vy:-0.6-Math.random()*1.5,age:0,life:480+Math.random()*460,size:7+Math.random()*9,hue:14+Math.random()*30});
+                } else if(kind==='bubble'){
+                    pcTrailParts.push({kind:'bubble',x:x+(Math.random()-0.5)*10,y:y+(Math.random()-0.5)*10,vx:(Math.random()-0.5)*0.5,vy:-0.25-Math.random()*0.5,age:0,life:950+Math.random()*550,size:5+Math.random()*7,hue:185+Math.random()*70});
+                } else {
+                    pcTrailParts.push({kind:'spark',x:x+(Math.random()-0.5)*8,y:y+(Math.random()-0.5)*8,vx:(Math.random()-0.5)*2.6,vy:(Math.random()-0.5)*2.6,age:0,life:360+Math.random()*420,size:1.6+Math.random()*2.4,hue:[45,52,190,200,285][Math.floor(Math.random()*5)]});
+                }
+            }
+        }
+        function pcTrailFrame(ts){
+            pcTrailRaf=requestAnimationFrame(pcTrailFrame);
+            if(!pcTrailOn||!pcTrailCtx) return;
+            const ctx=pcTrailCtx;
+            const now=(typeof ts==='number'&&ts)?ts:performance.now();
+            const dt=Math.min(40,pcTrailLastTs?now-pcTrailLastTs:16);
+            pcTrailLastTs=now;
+            ctx.setTransform(pcTrailDpr,0,0,pcTrailDpr,0,0);
+            ctx.clearRect(0,0,pcTrailW,pcTrailH);
+            ctx.globalCompositeOperation='lighter';
+            ctx.globalAlpha=1;
+            while(pcTrailPts.length && now-pcTrailPts[0].t>1100) pcTrailPts.shift();
+            if(pcTrailType==='lightning') pcTrailDrawLightning(now);
+            else if(pcTrailType==='ribbon') pcTrailDrawRibbon(now);
+            pcTrailDrawParts(now,dt);
+            ctx.globalAlpha=1;
+            ctx.globalCompositeOperation='source-over';
+            ctx.shadowBlur=0;
+        }
+        function pcTrailDrawLightning(now){
+            const ctx=pcTrailCtx, pts=pcTrailPts, n=pts.length;
+            if(n<2){
+                if(n===1){
+                    const p=pts[0];
+                    const g=ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,26);
+                    g.addColorStop(0,'rgba(190,235,255,0.5)');
+                    g.addColorStop(1,'rgba(90,180,255,0)');
+                    ctx.fillStyle=g; ctx.beginPath(); ctx.arc(p.x,p.y,26,0,6.283); ctx.fill();
+                }
+                return;
+            }
+            const idle=now-pts[n-1].t;
+            const fade=Math.max(0,Math.min(1,1-(idle-180)/800));
+            if(fade<=0) return;
+            ctx.globalAlpha=fade;
+            ctx.lineCap='round'; ctx.lineJoin='round';
+            const cfg=[
+                {j:10,w:1.8,c:'rgba(255,255,255,0.95)',b:8},
+                {j:16,w:4,c:'rgba(130,220,255,0.6)',b:16},
+                {j:24,w:9,c:'rgba(70,165,255,0.22)',b:26}
+            ];
+            for(const cf of cfg){
+                ctx.beginPath();
+                for(let i=0;i<n;i++){
+                    const p=pts[i];
+                    const ox=i===0||i===n-1?0:(Math.random()-0.5)*cf.j*2;
+                    const oy=i===0||i===n-1?0:(Math.random()-0.5)*cf.j;
+                    if(i) ctx.lineTo(p.x+ox,p.y+oy); else ctx.moveTo(p.x+ox,p.y+oy);
+                }
+                ctx.strokeStyle=cf.c; ctx.lineWidth=cf.w;
+                ctx.shadowColor='#58beff'; ctx.shadowBlur=cf.b; ctx.stroke();
+            }
+            // 随机分叉电弧，更像真正的闪电
+            const st=Math.floor(n*0.35), en=n-1;
+            if(en>st){
+                for(let br=0;br<2;br++){
+                    const i=st+Math.floor(Math.random()*(en-st));
+                    let bx=pts[i].x, by=pts[i].y, ang=Math.random()*6.283;
+                    ctx.beginPath(); ctx.moveTo(bx,by);
+                    for(let s=0;s<3;s++){
+                        ang+=(Math.random()-0.5)*1.4;
+                        const len=8+Math.random()*16;
+                        bx+=Math.cos(ang)*len; by+=Math.sin(ang)*len;
+                        ctx.lineTo(bx,by);
+                    }
+                    ctx.strokeStyle='rgba(160,235,255,0.45)';
+                    ctx.lineWidth=1.4; ctx.shadowBlur=8; ctx.stroke();
+                }
+            }
+            ctx.shadowBlur=0;
+        }
+        function pcTrailDrawRibbon(now){
+            const ctx=pcTrailCtx, pts=pcTrailPts, n=pts.length;
+            if(n<2) return;
+            ctx.lineCap='round'; ctx.lineJoin='round';
+            for(let i=1;i<n;i++){
+                const p0=pts[i-1], p1=pts[i];
+                const a=1-Math.max(0,now-p0.t)/1000;
+                if(a<=0) continue;
+                const t=i/n, hue=(now*0.12+i*10)%360;
+                ctx.beginPath(); ctx.moveTo(p0.x,p0.y); ctx.lineTo(p1.x,p1.y);
+                ctx.lineWidth=Math.max(2,t*12);
+                ctx.strokeStyle='hsla('+hue+',100%,68%,'+(a*0.16)+')';
+                ctx.stroke();
+                ctx.lineWidth=Math.max(1,t*7);
+                ctx.strokeStyle='hsla('+hue+',100%,72%,'+(a*0.9)+')';
+                ctx.stroke();
+            }
+        }
+        function pcTrailDrawParts(now,dt){
+            const ctx=pcTrailCtx, k=dt/16.7;
+            for(let i=pcTrailParts.length-1;i>=0;i--){
+                const p=pcTrailParts[i];
+                p.age+=dt;
+                if(p.age>=p.life){ pcTrailParts.splice(i,1); continue; }
+                p.x+=p.vx*k; p.y+=p.vy*k;
+                if(p.kind==='fire'){ p.vy-=0.02*k; p.vx*=0.99; }
+                else if(p.kind==='spark'){ p.vx*=0.965; p.vy*=0.965; }
+                else if(p.kind==='bubble'){ p.x+=Math.sin((p.age+p.size)*0.02)*0.35*k; }
+                const a=1-p.age/p.life;
+                if(p.kind==='fire'){
+                    const R=p.size*1.9;
+                    ctx.save();
+                    ctx.translate(p.x,p.y); ctx.scale(1,1.5);   // 纵向拉伸成火苗形状
+                    const g=ctx.createRadialGradient(0,0,0,0,0,R);
+                    g.addColorStop(0,'rgba(255,238,176,'+(a*0.9)+')');
+                    g.addColorStop(0.28,'hsla('+(p.hue+18)+',100%,64%,'+(a*0.75)+')');
+                    g.addColorStop(0.62,'hsla('+p.hue+',100%,50%,'+(a*0.45)+')');
+                    g.addColorStop(1,'hsla('+p.hue+',100%,40%,0)');
+                    ctx.fillStyle=g; ctx.beginPath(); ctx.arc(0,0,R,0,6.283); ctx.fill();
+                    ctx.restore();
+                } else if(p.kind==='bubble'){
+                    ctx.strokeStyle='hsla('+p.hue+',100%,85%,'+(a*0.8)+')';
+                    ctx.lineWidth=1;
+                    ctx.beginPath(); ctx.arc(p.x,p.y,p.size,0,6.283); ctx.stroke();
+                    const g=ctx.createRadialGradient(p.x-p.size*0.35,p.y-p.size*0.35,0,p.x,p.y,p.size);
+                    g.addColorStop(0,'rgba(255,255,255,'+(a*0.45)+')');
+                    g.addColorStop(0.7,'hsla('+p.hue+',100%,75%,'+(a*0.12)+')');
+                    g.addColorStop(1,'hsla('+p.hue+',100%,70%,0)');
+                    ctx.fillStyle=g; ctx.beginPath(); ctx.arc(p.x,p.y,p.size,0,6.283); ctx.fill();
+                } else {
+                    const r=p.size*2.6;
+                    ctx.strokeStyle='hsla('+p.hue+',100%,88%,'+(a*0.95)+')';
+                    ctx.lineWidth=1.2;
+                    ctx.beginPath();
+                    ctx.moveTo(p.x-r,p.y); ctx.lineTo(p.x+r,p.y);
+                    ctx.moveTo(p.x,p.y-r); ctx.lineTo(p.x,p.y+r);
+                    ctx.stroke();
+                    const g=ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,r);
+                    g.addColorStop(0,'hsla('+p.hue+',100%,92%,'+a+')');
+                    g.addColorStop(0.4,'hsla('+p.hue+',100%,68%,'+(a*0.55)+')');
+                    g.addColorStop(1,'hsla('+p.hue+',100%,60%,0)');
+                    ctx.fillStyle=g; ctx.beginPath(); ctx.arc(p.x,p.y,r,0,6.283); ctx.fill();
+                }
+            }
+        }
+        function initPcTrail(){
+            pcTrailCv=document.getElementById('pcTrailCanvas');
+            if(!pcTrailCv) return;
+            pcTrailCtx=pcTrailCv.getContext('2d');
+            pcTrailResize();
+            window.addEventListener('resize',pcTrailResize);
+            window.addEventListener('pointermove',(e)=>{
+                if(!pcTrailOn||!PC_UI_MQ.matches) return;
+                const x=e.clientX, y=e.clientY, now=performance.now();
+                if(pcTrailType==='lightning'||pcTrailType==='ribbon'){
+                    if(now-pcTrailLastPoint<14) return;
+                    pcTrailLastPoint=now;
+                    pcTrailPts.push({x,y,t:now});
+                    if(pcTrailPts.length>80) pcTrailPts.shift();
+                    if(pcTrailType==='lightning'&&Math.random()<0.6) pcTrailSpawn('spark',x,y,1);
+                    pcTrailLastX=x; pcTrailLastY=y; pcTrailHasLast=true;
+                } else {
+                    if(now-pcTrailLastSpawn<12) return;
+                    pcTrailLastSpawn=now;
+                    if(!pcTrailHasLast){ pcTrailLastX=x; pcTrailLastY=y; pcTrailHasLast=true; }
+                    // 沿上一位置到当前位置插值补点，快速移动时也不会断成一串孤立的点
+                    const dx=x-pcTrailLastX, dy=y-pcTrailLastY;
+                    const dist=Math.hypot(dx,dy);
+                    const steps=Math.max(1,Math.min(7,Math.floor(dist/14)));
+                    for(let s=1;s<=steps;s++){
+                        const t=s/steps, px=pcTrailLastX+dx*t, py=pcTrailLastY+dy*t;
+                        if(pcTrailType==='fire') pcTrailSpawn('fire',px,py,2);
+                        else if(pcTrailType==='bubble') pcTrailSpawn('bubble',px,py,2);
+                        else pcTrailSpawn('spark',px,py,2);
+                    }
+                    pcTrailLastX=x; pcTrailLastY=y;
+                }
+            },{passive:true});
+            document.getElementById('btnTrailToggle').addEventListener('click',()=>{
+                const on=!document.getElementById('btnTrailToggle').classList.contains('on');
+                try{ localStorage.setItem('trailOn',on?'1':'0'); }catch(e){}
+                sfxClick(); applyPcTrailSettings();
+            });
+            document.querySelectorAll('#trailSegWrap .seg-btn').forEach(b=>{
+                b.addEventListener('click',()=>{
+                    try{ localStorage.setItem('trailType',b.dataset.trail); }catch(e){}
+                    sfxClick(); applyPcTrailSettings();
+                });
+            });
+            try{ PC_UI_MQ.addEventListener('change',applyPcTrailSettings); }catch(e){ try{ PC_UI_MQ.addListener(applyPcTrailSettings); }catch(_){} }
+            applyPcTrailSettings();
+        }
+
         const mouseAim={x:1,y:0,on:false};
 
         // ============ 键盘控制（手动对战） ============
@@ -2220,7 +2454,7 @@
         document.getElementById('btnAboutBack').addEventListener('click',()=>showScreen(document.getElementById('screenSettings')));
         document.getElementById('btnDevSetting').addEventListener('click',()=>showScreen(document.getElementById('screenDev')));
         document.getElementById('btnDevBack').addEventListener('click',()=>showScreen(document.getElementById('screenSettings')));
-        document.getElementById('btnDevToggle').addEventListener('click',()=>{ const btn=document.getElementById('btnDevToggle'); const on=!btn.classList.contains('on'); try{ if(on) localStorage.setItem('lightUnlocked','1'); else{ localStorage.removeItem('lightUnlocked'); localStorage.removeItem('moreAnim'); localStorage.removeItem('hideNames'); localStorage.removeItem('hideZhu'); localStorage.removeItem('bgmOn'); } }catch(e){} sfxClick(); applyLightSettings(); if(!on) showScreen(document.getElementById('screenSettings')); });
+        document.getElementById('btnDevToggle').addEventListener('click',()=>{ const btn=document.getElementById('btnDevToggle'); const on=!btn.classList.contains('on'); try{ if(on) localStorage.setItem('lightUnlocked','1'); else{ localStorage.removeItem('lightUnlocked'); localStorage.removeItem('moreAnim'); localStorage.removeItem('hideNames'); localStorage.removeItem('hideZhu'); localStorage.removeItem('bgmOn'); localStorage.removeItem('trailOn'); localStorage.removeItem('trailType'); } }catch(e){} sfxClick(); applyLightSettings(); applyPcTrailSettings(); if(!on) showScreen(document.getElementById('screenSettings')); });
         document.getElementById('btnJoySetting').addEventListener('click',()=>{ renderJoyPreview(); showScreen(document.getElementById('screenJoySettings')); });
         document.getElementById('btnJoyBack').addEventListener('click',()=>{ showScreen(document.getElementById('screenSettings')); });
         document.getElementById('btnJoyReset').addEventListener('click',()=>{ joyLayout=JSON.parse(JSON.stringify(DEFAULT_JOY_LAYOUT)); saveJoyLayout(); applyJoyLayout(); renderJoyPreview(); sfxClick(); });
@@ -2381,6 +2615,41 @@
             if(hp) hp.textContent='❤️ '+role.hp;
             if(sk) sk.textContent=role.desc||'';
             if(role.color) card.style.setProperty('--role-color',role.color); else card.style.removeProperty('--role-color');
+        }
+        // ============ 电脑端主菜单：我的世界同款闪烁标语（每次回主菜单随机换一句） ============
+        const PC_SPLASHES=[
+            'WZX是卡牌对决的创始人',
+            '100% 手绘卡牌',
+            '老师阵营正在看着你',
+            '刘焜：干饭才是本体',
+            '别站在音波里！',
+            '音波会穿透，不会反弹',
+            '空格发射，左键也行',
+            'WASD 走位，鼠标瞄准',
+            '三合一，一次玩个够',
+            '故事模式：序章开启',
+            '全屏游玩更沉浸',
+            '好友开房，实时对战',
+            '吃食物真的能回血',
+            '血条见底也别慌',
+            '手速就是胜负',
+            '隐藏角色也在练习',
+            '历史老师：这题我会',
+            '王老师的课没人敢逃',
+            '摇杆一推，弹幕起飞',
+            '电脑端专属桌面布局',
+            '卡牌对决，启动！',
+            '今天的运气值：满格'
+        ];
+        let pcSplashFirst=true;
+        function renderPcSplash(){
+            const el=document.getElementById('pcSplash');
+            if(!el) return;
+            let text;
+            if(pcSplashFirst){ text=PC_SPLASHES[0]; pcSplashFirst=false; }
+            else do{ text=PC_SPLASHES[Math.floor(Math.random()*PC_SPLASHES.length)]; }while(text===el.textContent && PC_SPLASHES.length>1);
+            el.textContent=text;
+            el.style.animation='none'; void el.offsetWidth; el.style.animation='';   // 重新触发脉动
         }
         function displayName(u){ return u?(u.nickname||u.username):''; }
         function setAvatarEl(imgEl,fbEl,avatar){
@@ -3754,6 +4023,8 @@
         initJoySettings();
         authInit();
         renderPcMenuRole();
+        renderPcSplash();
+        initPcTrail();
         canvas=document.getElementById('battleCanvas'); ctx=canvas.getContext('2d'); arenaSize=arenaTargetSize(); canvas.width=arenaSize; canvas.height=arenaSize;
         window.addEventListener('resize',()=>{ applyJoyLayout(); if(battleActive){ if(gameMode==='online') return; const s=arenaTargetSize(); if(s!==arenaSize){ const r=s/arenaSize; arenaSize=s; canvas.width=arenaSize; canvas.height=arenaSize; entities.forEach(e=>{e.x*=r;e.y*=r;}); projectiles.forEach(p=>{p.x*=r;p.y*=r;}); } } });
     })();
