@@ -977,3 +977,24 @@ body.pc #screenMenu #btnPcMore { bottom:4px; }
     .skin-search { min-width:0; width:100%; }
     .skin-canvas-stage { border-radius:12px; }
 }
+
+/* —— 皮肤紧凑按钮：统一垂直居中，修复电脑端大内边距把文字挤出按钮 —— */
+.skin-tool-row .btn, .skin-save-row .btn, .skin-mini-item .btn,
+.skin-tabs .btn, .skin-sort-row .btn, .skin-card-actions .btn {
+    display:inline-flex; align-items:center; justify-content:center; line-height:1; white-space:nowrap;
+}
+body.pc .skin-tool-row .btn, body.pc .skin-save-row .btn, body.pc .skin-mini-item .btn,
+body.pc .skin-tabs .btn, body.pc .skin-sort-row .btn, body.pc .skin-card-actions .btn { min-width:0 !important; }
+body.pc .skin-tool-row .btn, body.pc .skin-save-row .btn { padding:0 8px; border-radius:12px; }
+body.pc .skin-mini-item .btn { padding:0 8px; border-radius:9px; }
+body.pc .skin-tabs .btn { padding:0 12px; border-radius:12px; }
+body.pc .skin-sort-row .btn { padding:0 10px; border-radius:10px; }
+body.pc .skin-card-actions .btn { padding:0 4px; border-radius:9px; }
+body.pc #pcMorePanel .btn { white-space:nowrap; }
+
+/* —— 皮肤管理：手机端主页入口，电脑端收进「更多」 —— */
+body.pc #screenMenu #btnManageSkin { display:none; }
+body.pc #screenMenu #btnMakeSkin, body.pc #screenMenu #btnSkinMarket { display:inline-flex; }
+body.pc #screenSkinManage.active { width:min(100%,1160px); gap:18px; }
+body.pc #screenSkinManage .skin-market-grid { grid-template-columns:repeat(auto-fill,minmax(178px,1fr)); max-height:56vh; }
+

@@ -247,13 +247,14 @@
 
         // ============ 界面导航 ============
         function showScreen(s){
-            ['screenMenu','screenMode','screenManualSelect','screenFreeSelect','screenDualDraw','screenVS','screenBattle','screenBRSelect','screenTri','screenVictory','screenSettings','screenDev','screenDevStory','screenLight','screenAbout','screenJoySettings','screenStory','screenStoryTest','screenStoryScene','screenDuelInvite','screenDuelIntro','screenStoryResult','screenSupport','screenAccount','screenAccSettings','screenFriends','screenChat','screenRoom','screenSkinEdit','screenSkinMarket'].forEach(id=>{
+            ['screenMenu','screenMode','screenManualSelect','screenFreeSelect','screenDualDraw','screenVS','screenBattle','screenBRSelect','screenTri','screenVictory','screenSettings','screenDev','screenDevStory','screenLight','screenAbout','screenJoySettings','screenStory','screenStoryTest','screenStoryScene','screenDuelInvite','screenDuelIntro','screenStoryResult','screenSupport','screenAccount','screenAccSettings','screenFriends','screenChat','screenRoom','screenSkinEdit','screenSkinMarket','screenSkinManage'].forEach(id=>{
                 const el=document.getElementById(id); if(el) el.classList.remove('active');
             });
             if(s) s.classList.add('active');
             if(s && s.id==='screenMenu'){ skinCloseMore(); renderPcMenuRole(); renderPcSplash(); }
             if(s && s.id==='screenSkinEdit') skinRefreshRoleSkins();
             if(s && s.id==='screenSkinMarket') skinMarketRefresh();
+            if(s && s.id==='screenSkinManage') renderSkinManage();
             initAudio();
             // 每个模式一首曲子：战斗按模式细分，其余按界面
             const sid=s?s.id:'';
@@ -2133,10 +2134,13 @@
 
         // ============ 电脑端检测（主指针为鼠标+可悬停 → 键盘鼠标操控；手机/平板走摇杆） ============
         const IS_PC=(function(){ try{ return window.matchMedia('(pointer:fine)').matches&&window.matchMedia('(hover:hover)').matches; }catch(e){ return !(('ontouchstart' in window)||navigator.maxTouchPoints>0); } })();
+        // ============ 手机系统识别：即使触屏设备误报 hover/fine，也不用电脑端布局 ============
+        const UA_STR=navigator.userAgent||'';
+        const IS_MOBILE_OS=/Android|iPhone|iPad|iPod|HarmonyOS|Mobile/i.test(UA_STR)||(/Macintosh/i.test(UA_STR)&&navigator.maxTouchPoints>1);
         // ============ 电脑端界面自动切换（鼠标+悬停设备 → body.pc 宽屏桌面布局；触屏设备保持原样） ============
         const PC_UI_MQ=window.matchMedia('(pointer:fine) and (hover:hover)');
         function applyPcUi(){
-            const on=PC_UI_MQ.matches;
+            const on=PC_UI_MQ.matches&&!IS_MOBILE_OS;
             document.body.classList.toggle('pc',on);
             document.documentElement.classList.toggle('pc',on);
         }
@@ -2959,7 +2963,7 @@
             try{
                 await skinPut(rec);
                 if(!silent) skinToast('已保存到本地：'+rec.name);
-                skinRefreshRoleSkins(); skinRefreshMenuRole();
+                skinRefreshRoleSkins(); skinRefreshMenuRole(); renderSkinManage();
                 return rec;
             }catch(e){ skinToast('保存失败：本地存储不可用'); return null; }
         }
@@ -2978,7 +2982,7 @@
                 if(d&&d.skin){ rec.publishedId=d.skin.id; rec.authorName=d.skin.author_name||''; await skinPut(rec); skinToast('已发布到皮肤市场！'); }
                 else skinToast('发布失败');
             }catch(e){ skinToast(e.message||'发布失败'); }
-            finally{ skinBusy=false; skinRefreshRoleSkins(); if(skinMarketTab!=='mine') skinMarketLoad(); }
+            finally{ skinBusy=false; skinRefreshRoleSkins(); renderSkinManage(); if(skinMarketTab!=='mine') skinMarketLoad(); }
         }
         async function skinPublishEditor(){
             if(!skinEditRole||!skinDoc) return;
@@ -3003,7 +3007,7 @@
         async function skinDeleteLocal(id){
             const rec=skinFind(id); if(!rec) return;
             if(!confirm('删除本地皮肤「'+rec.name+'」？')) return;
-            try{ await skinDel(id); skinToast('已删除'); skinRefreshRoleSkins(); skinRefreshMenuRole(); renderMine(); }catch(e){ skinToast('删除失败'); }
+            try{ await skinDel(id); skinToast('已删除'); skinRefreshRoleSkins(); skinRefreshMenuRole(); renderMine(); renderSkinManage(); }catch(e){ skinToast('删除失败'); }
         }
         async function skinUnpublish(id){
             if(!authToken){ skinToast('请先登录后再操作'); return; }
@@ -3012,7 +3016,7 @@
                 await authApi('/skins/'+encodeURIComponent(id),{method:'DELETE'});
                 const rec=skinCache.find(s=>s.publishedId===id);
                 if(rec){ rec.publishedId=''; await skinPut(rec); }
-                skinToast('已下架'); skinRefreshRoleSkins(); skinMarketLoad();
+                skinToast('已下架'); skinRefreshRoleSkins(); renderSkinManage(); skinMarketLoad();
             }catch(e){ skinToast(e.message||'下架失败'); }
         }
         function skinRefreshMenuRole(){
@@ -3113,6 +3117,18 @@
                     +'<div class="skin-card-actions">'+acts+'</div></div>';
             }).join('');
         }
+        function skinLocalCardHtml(s){
+            const eq=skinEquipMap[s.roleId]===s.id;
+            let acts='<button class="btn btn-sm '+(eq?'btn-danger':'btn-success')+'" data-act="'+(eq?'unequip':'equip')+'">'+(eq?'取消装备':'装备')+'</button>';
+            if(s.publishedId) acts+='<button class="btn btn-sm btn-danger" data-act="unpub">下架</button>';
+            else if(!s.source) acts+='<button class="btn btn-sm btn-info" data-act="pub">发布</button>';
+            acts+='<button class="btn btn-sm" data-act="del">删除</button>';
+            return '<div class="skin-card" data-id="'+skinEsc(s.id)+'">'
+                +'<div class="skin-card-thumb"><img src="'+s.img+'" alt=""></div>'
+                +'<div class="skin-card-title">'+skinEsc(s.name)+'</div>'
+                +'<div class="skin-card-meta">'+skinEsc(skinRoleLabel(s.roleId))+' · '+skinEsc(s.publishedId?'已上架市场':(s.source?'来自市场':'仅本地'))+'</div>'
+                +'<div class="skin-card-actions">'+acts+'</div></div>';
+        }
         function renderMine(){
             const grid=document.getElementById('skinMarketGrid'), empty=document.getElementById('skinMarketEmpty');
             const count=document.getElementById('skinMarketCount');
@@ -3124,23 +3140,25 @@
                 return;
             }
             if(empty) empty.style.display='none';
-            grid.innerHTML=list.map(s=>{
-                const eq=skinEquipMap[s.roleId]===s.id;
-                let acts='<button class="btn btn-sm '+(eq?'btn-danger':'btn-success')+'" data-act="'+(eq?'unequip':'equip')+'">'+(eq?'取消装备':'装备')+'</button>';
-                if(s.publishedId) acts+='<button class="btn btn-sm btn-danger" data-act="unpub">下架</button>';
-                else if(!s.source) acts+='<button class="btn btn-sm btn-info" data-act="pub">发布</button>';
-                acts+='<button class="btn btn-sm" data-act="del">删除</button>';
-                return '<div class="skin-card" data-id="'+skinEsc(s.id)+'">'
-                    +'<div class="skin-card-thumb"><img src="'+s.img+'" alt=""></div>'
-                    +'<div class="skin-card-title">'+skinEsc(s.name)+'</div>'
-                    +'<div class="skin-card-meta">'+skinEsc(skinRoleLabel(s.roleId))+' · '+skinEsc(s.publishedId?'已上架市场':(s.source?'来自市场':'仅本地'))+'</div>'
-                    +'<div class="skin-card-actions">'+acts+'</div></div>';
-            }).join('');
+            grid.innerHTML=list.map(skinLocalCardHtml).join('');
+        }
+        function renderSkinManage(){
+            const grid=document.getElementById('skinManageGrid'), empty=document.getElementById('skinManageEmpty');
+            const count=document.getElementById('skinManageCount');
+            if(!grid) return;
+            const list=skinCache.slice().sort((a,b)=>String(a.roleId||'').localeCompare(String(b.roleId||''))||((b.createdAt||0)-(a.createdAt||0)));
+            if(count) count.textContent=list.length?('本地 '+list.length+' 款'):'';
+            if(!list.length){
+                grid.innerHTML=''; if(empty){ empty.style.display=''; empty.textContent='还没有保存过皮肤，先去「制作皮肤」画一个吧'; }
+                return;
+            }
+            if(empty) empty.style.display='none';
+            grid.innerHTML=list.map(skinLocalCardHtml).join('');
         }
         async function skinDownload(id){
             if(!id||skinBusy) return;
             const local=skinFind(id);
-            if(local){ skinEquipRole(local.roleId,local.id); skinToast('已装备：'+local.name); renderMarket(); skinRefreshMenuRole(); return; }
+            if(local){ skinEquipRole(local.roleId,local.id); skinToast('已装备：'+local.name); renderMarket(); renderMine(); renderSkinManage(); skinRefreshMenuRole(); return; }
             skinBusy=true; skinToast('正在下载皮肤…');
             try{
                 const d=await authApi('/skins/'+encodeURIComponent(id));
@@ -3152,7 +3170,7 @@
                     skinRefreshMenuRole();
                 }
             }catch(e){ skinToast(e.message||'下载失败'); }
-            finally{ skinBusy=false; renderMarket(); renderMine(); }
+            finally{ skinBusy=false; renderMarket(); renderMine(); renderSkinManage(); }
         }
         function skinGridAction(e){
             const b=e.target.closest('[data-act]'); if(!b) return;
@@ -3160,15 +3178,15 @@
             const id=card.dataset.id, act=b.dataset.act;
             if(act==='download'){ sfxClick(); skinDownload(id); return; }
             if(act==='unpub'){
-                if(skinMarketTab==='mine'){ const rec=skinFind(id); if(rec&&rec.publishedId) skinUnpublish(rec.publishedId); }
+                if(card.closest('#skinManageGrid')||skinMarketTab==='mine'){ const rec=skinFind(id); if(rec&&rec.publishedId) skinUnpublish(rec.publishedId); }
                 else skinUnpublish(id);
                 return;
             }
             const rec=skinFind(id);
             if(act==='del'){ skinDeleteLocal(id); return; }
             if(!rec) return;
-            if(act==='equip'){ sfxClick(); skinEquipRole(rec.roleId,rec.id); skinToast('已装备：'+rec.name); skinRefreshMenuRole(); renderMarket(); renderMine(); }
-            else if(act==='unequip'){ sfxClick(); skinEquipRole(rec.roleId,''); skinToast('已取消装备'); skinRefreshMenuRole(); renderMarket(); renderMine(); }
+            if(act==='equip'){ sfxClick(); skinEquipRole(rec.roleId,rec.id); skinToast('已装备：'+rec.name); skinRefreshMenuRole(); renderMarket(); renderMine(); renderSkinManage(); }
+            else if(act==='unequip'){ sfxClick(); skinEquipRole(rec.roleId,''); skinToast('已取消装备'); skinRefreshMenuRole(); renderMarket(); renderMine(); renderSkinManage(); }
             else if(act==='pub'){ sfxClick(); skinPublishRecord(rec); }
         }
         function skinReadLocalFile(file){
@@ -3199,6 +3217,8 @@
             on('btnSkinMarket',()=>{ sfxClick(); skinCloseMore(); showScreen(document.getElementById('screenSkinMarket')); });
             on('pcMoreMakeSkin',()=>{ sfxClick(); skinCloseMore(); skinOpenScreen(); });
             on('pcMoreSkinMarket',()=>{ sfxClick(); skinCloseMore(); showScreen(document.getElementById('screenSkinMarket')); });
+            on('btnManageSkin',()=>{ sfxClick(); skinCloseMore(); showScreen(document.getElementById('screenSkinManage')); });
+            on('pcMoreManageSkin',()=>{ sfxClick(); skinCloseMore(); showScreen(document.getElementById('screenSkinManage')); });
             on('btnPcMore',e=>{ e.stopPropagation(); sfxClick(); const p=document.getElementById('pcMorePanel'); if(p) p.classList.toggle('open'); });
             document.addEventListener('click',e=>{
                 const p=document.getElementById('pcMorePanel'), b=document.getElementById('btnPcMore');
@@ -3279,6 +3299,10 @@
             });
             const grid=document.getElementById('skinMarketGrid');
             if(grid) grid.addEventListener('click',skinGridAction);
+            const mg=document.getElementById('skinManageGrid');
+            if(mg) mg.addEventListener('click',skinGridAction);
+            on('btnSkinManageMake',()=>{ sfxClick(); skinOpenScreen(); });
+            on('btnManageSkinBack',()=>{ sfxClick(); showScreen(document.getElementById('screenMenu')); });
             on('btnSkinMarketMake',()=>{ sfxClick(); skinOpenScreen(); });
             on('btnSkinMarketBack',()=>{ sfxClick(); showScreen(document.getElementById('screenMenu')); });
         }

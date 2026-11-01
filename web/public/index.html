@@ -34,6 +34,7 @@
             <button class="btn" id="btnStartGame" style="font-size:18px;">🎮 开始游戏</button>
             <button class="btn btn-sm skin-entry" id="btnMakeSkin">🎨 制作皮肤</button>
             <button class="btn btn-sm skin-entry" id="btnSkinMarket">🛍️ 皮肤市场</button>
+            <button class="btn btn-sm skin-entry skin-entry-mobile" id="btnManageSkin">🧰 皮肤管理</button>
             <button class="btn btn-info btn-sm" id="btnShowRules">📜 游戏规则</button>
             <button class="btn btn-sm" id="btnSettings" aria-label="设置"><span class="settings-label">⚙️ 设置</span></button>
             <button class="btn btn-info btn-sm" id="btnFullscreen">⛶ 全屏</button>
@@ -47,8 +48,9 @@
         <div class="pc-more-panel pc-only" id="pcMorePanel">
             <button class="btn btn-sm" id="pcMoreMakeSkin">🎨 制作皮肤</button>
             <button class="btn btn-sm btn-info" id="pcMoreSkinMarket">🛍️ 皮肤市场</button>
+            <button class="btn btn-sm btn-success" id="pcMoreManageSkin">🧰 皮肤管理</button>
         </div>
-        <div style="color:#667;font-size:10px;" id="versionLabel">v9.26 · 角色皮肤市场</div>
+        <div style="color:#667;font-size:10px;" id="versionLabel">v9.27 · 皮肤管理</div>
     </div>
     <div class="screen" id="screenSupport">
         <div class="game-title" style="font-size:20px;">💬 在线客服</div>
@@ -402,7 +404,22 @@
             <button class="btn btn-sm" id="btnSkinMarketBack">⬅ 返回主菜单</button>
         </div>
     </div>
-    <div class="screen" id="screenMode">
+    <div class="screen" id="screenSkinManage">
+            <div class="game-title" style="font-size:20px;">🧰 皮肤管理</div>
+            <div class="skin-market-panel">
+                <div class="skin-market-sub">
+                    <div class="skin-hint" style="text-align:left;">管理已保存的皮肤：装备、下架或删除</div>
+                    <span id="skinManageCount"></span>
+                </div>
+                <div class="skin-market-grid" id="skinManageGrid"></div>
+                <div class="skin-market-empty" id="skinManageEmpty" style="display:none;"></div>
+            </div>
+            <div class="skin-market-actions">
+                <button class="btn btn-sm" id="btnSkinManageMake">🎨 制作皮肤</button>
+                <button class="btn btn-sm" id="btnManageSkinBack">⬅ 返回主菜单</button>
+            </div>
+        </div>
+        <div class="screen" id="screenMode">
         <div class="game-title" style="font-size:20px;">选择模式</div>
         <button class="btn btn-success" id="btnFreeMode">🆓 自由模式</button>
         <button class="btn" id="btnDualMode">👥 双人对战</button>
