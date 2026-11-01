@@ -686,18 +686,16 @@ body.pc .pc-card-skill { color:#9aa3c2; font-size:11px; line-height:1.6; text-al
 /* 右侧：开始按钮 + 2×3 操作区，统一宽度对齐 */
 body.pc #screenMenu .menu-actions {
     grid-column:2; grid-row:2; align-self:center; justify-self:stretch;
-    display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); grid-template-rows:auto auto auto auto auto;
+    display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); grid-template-rows:auto auto auto auto;
     gap:14px; width:100%; max-width:640px;
 }
 body.pc #screenMenu .menu-actions > #btnStartGame { grid-area:1/1/2/3; height:78px; font-size:22px; letter-spacing:2px; border-radius:18px; color:#15152a; border-color:#ffe9b0; background:linear-gradient(135deg,#f8dc96,#e3ab3c); box-shadow:0 14px 34px rgba(240,192,96,0.32); }
 body.pc #screenMenu .menu-actions > #btnStartGame:hover { transform:translateY(-3px); filter:brightness(1.06); box-shadow:0 18px 44px rgba(240,192,96,0.45); }
-body.pc #screenMenu #btnMakeSkin { grid-area:2/1; }
-body.pc #screenMenu #btnSkinMarket { grid-area:2/2; }
-body.pc #screenMenu #btnShowRules { grid-area:3/1; }
-body.pc #screenMenu #btnFullscreen { grid-area:3/2; }
-body.pc #screenMenu #btnSupport { grid-area:4/1; }
-body.pc #screenMenu #btnFriends { grid-area:4/2; }
-body.pc #screenMenu #btnAccount { grid-area:5/1/6/3; }
+body.pc #screenMenu #btnShowRules { grid-area:2/1; }
+body.pc #screenMenu #btnFullscreen { grid-area:2/2; }
+body.pc #screenMenu #btnSupport { grid-area:3/1; }
+body.pc #screenMenu #btnFriends { grid-area:3/2; }
+body.pc #screenMenu #btnAccount { grid-area:4/1/5/3; }
 body.pc #screenMenu .menu-actions > .btn-sm { width:100%; min-width:0; height:60px; margin:0; font-size:15px; border-radius:16px; }
 body.pc #screenMenu #versionLabel { grid-column:1/-1; grid-row:3; justify-self:center; font-size:12px !important; color:#6b7390 !important; margin-top:10px; }
 
@@ -868,6 +866,8 @@ body.pc .dlg-speaker b { font-size:15px; }
    角色皮肤：制作 / 本地皮肤库 / 皮肤市场
    ============================================================ */
 body.pc .skin-entry { border-color:rgba(240,192,96,0.42); background:linear-gradient(135deg,rgba(240,192,96,0.16),rgba(125,90,158,0.2)); }
+/* 手机端三个皮肤入口保持方块按钮：小圆角、金边，不用圆形/胶囊 */
+.skin-entry { border-radius:12px; }
 #screenSkinEdit.active { width:100%; }
 .skin-hint { color:#9aa3c2; font-size:12px; text-align:center; line-height:1.6; }
 .skin-pick-view { width:100%; display:flex; flex-direction:column; align-items:center; gap:12px; }
@@ -1007,7 +1007,9 @@ body.pc .skin-sort-row .btn { padding:0 10px; border-radius:10px; }
 body.pc .skin-card-actions .btn { padding:0 4px; border-radius:9px; }
 body.pc #pcMorePanel .btn { white-space:nowrap; }
 
-/* —— 皮肤入口：电脑端主页保留制作/市场，管理收进「更多」；手机端三个都在主页 —— */
+/* —— 皮肤入口：电脑端一律收进「更多」，主页三个入口全部隐藏；手机端主页显示三个方块按钮 —— */
+body.pc #screenMenu #btnMakeSkin,
+body.pc #screenMenu #btnSkinMarket,
 body.pc #screenMenu #btnManageSkin { display:none; }
 body.pc #screenSkinManage.active { width:min(100%,1160px); gap:18px; }
 body.pc #screenSkinManage .skin-market-grid { grid-template-columns:repeat(auto-fill,minmax(178px,1fr)); max-height:56vh; }

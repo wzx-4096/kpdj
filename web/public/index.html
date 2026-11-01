@@ -7,6 +7,19 @@
     <link rel="stylesheet" href="./css/style.css">
 </head>
 <body>
+<script>
+/* 首屏前置识别电脑端：在页面内容绘制前打上 pc 类，避免先闪手机版再切电脑版 */
+(function(){
+    try{
+        var ua=navigator.userAgent||'';
+        var mob=/Android|iPhone|iPad|iPod|HarmonyOS|Mobile/i.test(ua)||(/Macintosh/i.test(ua)&&navigator.maxTouchPoints>1);
+        if(!mob&&window.matchMedia('(pointer:fine) and (hover:hover)').matches){
+            document.body.classList.add('pc');
+            document.documentElement.classList.add('pc');
+        }
+    }catch(e){}
+})();
+</script>
 <div class="bg-particles" id="bgParticles"></div>
 <canvas id="pcTrailCanvas" aria-hidden="true"></canvas>
 <div id="skinToast"></div>
@@ -50,7 +63,7 @@
             <button class="btn btn-sm btn-info" id="pcMoreSkinMarket">🛍️ 皮肤市场</button>
             <button class="btn btn-sm btn-success" id="pcMoreManageSkin">🧰 皮肤管理</button>
         </div>
-        <div style="color:#667;font-size:10px;" id="versionLabel">v9.29 · 皮肤管理</div>
+        <div style="color:#667;font-size:10px;" id="versionLabel">v9.30 · 皮肤管理</div>
     </div>
     <div class="screen" id="screenSupport">
         <div class="game-title" style="font-size:20px;">💬 在线客服</div>
