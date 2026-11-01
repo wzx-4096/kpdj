@@ -865,9 +865,8 @@ body.pc .dlg-speaker b { font-size:15px; }
 /* ============================================================
    角色皮肤：制作 / 本地皮肤库 / 皮肤市场
    ============================================================ */
-body.pc .skin-entry { border-color:rgba(240,192,96,0.42); background:linear-gradient(135deg,rgba(240,192,96,0.16),rgba(125,90,158,0.2)); }
-/* 手机端三个皮肤入口保持方块按钮：小圆角、金边，不用圆形/胶囊 */
-.skin-entry { border-radius:12px; }
+/* 皮肤入口按钮：手机端保持圆润胶囊造型，不使用方块样式 */
+.skin-entry { border-color:rgba(240,192,96,0.42); background:linear-gradient(135deg,rgba(240,192,96,0.16),rgba(125,90,158,0.2)); }
 #screenSkinEdit.active { width:100%; }
 .skin-hint { color:#9aa3c2; font-size:12px; text-align:center; line-height:1.6; }
 .skin-pick-view { width:100%; display:flex; flex-direction:column; align-items:center; gap:12px; }
@@ -892,7 +891,7 @@ body.pc .skin-entry { border-color:rgba(240,192,96,0.42); background:linear-grad
 .skin-current-avatar img { width:38px; height:38px; object-fit:cover; border-radius:50%; }
 .skin-current-name { color:#fff; font-weight:800; font-size:14px; }
 .skin-tool-row { display:flex; gap:8px; flex-wrap:wrap; }
-.skin-tool-row .btn { flex:1 1 0; min-width:0 !important; height:42px; padding:0 8px; font-size:12px; border-radius:12px; margin:0; }
+.skin-tool-row .btn { flex:1 1 0; min-width:0 !important; height:42px; padding:0 8px; font-size:12px; border-radius:999px; margin:0; }
 .skin-tool-row .btn.active { border-color:#fff; color:#15152a; background:linear-gradient(135deg,#f8dc96,#e3ab3c); }
 .skin-color-row { display:flex; gap:8px; flex-wrap:wrap; padding:2px 0; }
 .skin-swatch { width:30px; height:30px; border-radius:50%; border:2px solid rgba(255,255,255,0.18); cursor:pointer; transition:transform 0.15s,border-color 0.15s; }
@@ -902,18 +901,18 @@ body.pc .skin-entry { border-color:rgba(240,192,96,0.42); background:linear-grad
 .skin-size-row input[type=range] { flex:1; }
 .skin-name-row .acc-input { width:100%; }
 .skin-save-row { display:flex; gap:8px; flex-wrap:wrap; }
-.skin-save-row .btn { flex:1 1 0; min-width:0 !important; height:44px; padding:0 8px; font-size:12px; border-radius:12px; margin:0; }
+.skin-save-row .btn { flex:1 1 0; min-width:0 !important; height:44px; padding:0 8px; font-size:12px; border-radius:999px; margin:0; }
 .skin-mini-title { color:#8a93b8; font-size:11px; margin-top:2px; }
 .skin-mini-list { display:flex; flex-direction:column; gap:8px; max-height:190px; overflow-y:auto; }
 .skin-mini-item { display:flex; align-items:center; gap:8px; padding:6px 8px; border-radius:10px; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.1); }
 .skin-mini-item img { width:40px; height:40px; border-radius:9px; object-fit:cover; background:#111; flex-shrink:0; }
 .skin-mini-name { flex:1; min-width:0; color:#dfe; font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.skin-mini-item .btn { min-width:0 !important; height:30px; padding:0 8px; font-size:10px; border-radius:9px; margin:0; flex-shrink:0; }
+.skin-mini-item .btn { min-width:0 !important; height:30px; padding:0 8px; font-size:10px; border-radius:999px; margin:0; flex-shrink:0; }
 .skin-mini-empty { color:#667; font-size:11px; text-align:center; padding:10px; }
 .skin-market-panel { width:100%; max-width:1080px; display:flex; flex-direction:column; gap:10px; padding:14px; border-radius:20px; background:linear-gradient(180deg,rgba(28,30,54,0.72),rgba(13,14,26,0.9)); border:1px solid rgba(240,192,96,0.2); box-shadow:0 24px 70px rgba(0,0,0,0.5); }
 .skin-market-head { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
 .skin-tabs { display:flex; gap:8px; flex-shrink:0; }
-.skin-tabs .btn { min-width:88px !important; height:38px; padding:0 12px; font-size:12px; margin:0; border-radius:12px; }
+.skin-tabs .btn { min-width:88px !important; height:38px; padding:0 12px; font-size:12px; margin:0; border-radius:999px; }
 .skin-search { flex:1; min-width:190px; margin:0 !important; height:40px; }
 .skin-filter-row { display:flex; gap:8px; overflow-x:auto; padding:2px 1px 6px; scrollbar-width:none; }
 .skin-filter-row::-webkit-scrollbar { display:none; }
@@ -922,7 +921,7 @@ body.pc .skin-entry { border-color:rgba(240,192,96,0.42); background:linear-grad
 .skin-filter-chip.active { color:#15152a; background:linear-gradient(135deg,#f8dc96,#e3ab3c); border-color:#ffe9b0; font-weight:800; }
 .skin-market-sub { display:flex; align-items:center; justify-content:space-between; gap:10px; }
 .skin-sort-row { display:flex; gap:6px; }
-.skin-sort-row .btn { min-width:64px !important; height:32px; padding:0 10px; font-size:11px; margin:0; border-radius:10px; }
+.skin-sort-row .btn { min-width:64px !important; height:32px; padding:0 10px; font-size:11px; margin:0; border-radius:999px; }
 #skinMarketCount { color:#7d8ab0; font-size:11px; }
 .skin-market-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:12px; max-height:52vh; overflow-y:auto; padding:2px; }
 .skin-card { display:flex; flex-direction:column; gap:6px; padding:8px; border-radius:14px; background:rgba(255,255,255,0.045); border:1px solid rgba(255,255,255,0.12); transition:transform 0.18s,border-color 0.18s,box-shadow 0.18s; }
@@ -933,7 +932,7 @@ body.pc .skin-entry { border-color:rgba(240,192,96,0.42); background:linear-grad
 .skin-card-meta { color:#8a93b8; font-size:10px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .skin-card-dl { color:#f0c060; font-size:10px; }
 .skin-card-actions { display:flex; gap:6px; margin-top:2px; }
-.skin-card-actions .btn { flex:1 1 0; min-width:0 !important; height:32px; padding:0 4px; font-size:10px; border-radius:9px; margin:0; }
+.skin-card-actions .btn { flex:1 1 0; min-width:0 !important; height:32px; padding:0 4px; font-size:10px; border-radius:999px; margin:0; }
 .skin-market-empty { color:#8a93b8; font-size:12px; text-align:center; padding:26px 10px; line-height:1.8; }
 .skin-market-actions { display:flex; gap:10px; flex-wrap:wrap; justify-content:center; }
 .skin-market-actions .btn { min-width:140px; }
@@ -974,7 +973,7 @@ body.pc .skin-side { width:100%; }
 body.pc #skinCanvas { cursor:crosshair; }
 body.pc .skin-market-grid { grid-template-columns:repeat(auto-fill,minmax(178px,1fr)); max-height:56vh; }
 body.pc .skin-market-panel { padding:18px; }
-body.pc .skin-market-actions .btn { min-width:180px; height:48px; }
+body.pc .skin-market-actions .btn { min-width:180px; height:48px; border-radius:999px; }
 body.pc .skin-market-head { flex-wrap:nowrap; }
 @media (max-width:960px) {
     body.pc .skin-editor-main { grid-template-columns:1fr; justify-items:center; }
@@ -1000,14 +999,14 @@ body.pc .skin-market-head { flex-wrap:nowrap; }
 }
 body.pc .skin-tool-row .btn, body.pc .skin-save-row .btn, body.pc .skin-mini-item .btn,
 body.pc .skin-tabs .btn, body.pc .skin-sort-row .btn, body.pc .skin-card-actions .btn { min-width:0 !important; }
-body.pc .skin-tool-row .btn, body.pc .skin-save-row .btn { padding:0 8px; border-radius:12px; }
-body.pc .skin-mini-item .btn { padding:0 8px; border-radius:9px; }
-body.pc .skin-tabs .btn { padding:0 12px; border-radius:12px; }
-body.pc .skin-sort-row .btn { padding:0 10px; border-radius:10px; }
-body.pc .skin-card-actions .btn { padding:0 4px; border-radius:9px; }
+body.pc .skin-tool-row .btn, body.pc .skin-save-row .btn { padding:0 8px; border-radius:999px; }
+body.pc .skin-mini-item .btn { padding:0 8px; border-radius:999px; }
+body.pc .skin-tabs .btn { padding:0 12px; border-radius:999px; }
+body.pc .skin-sort-row .btn { padding:0 10px; border-radius:999px; }
+body.pc .skin-card-actions .btn { padding:0 4px; border-radius:999px; }
 body.pc #pcMorePanel .btn { white-space:nowrap; }
 
-/* —— 皮肤入口：电脑端一律收进「更多」，主页三个入口全部隐藏；手机端主页显示三个方块按钮 —— */
+/* —— 皮肤入口：电脑端一律收进「更多」，主页三个入口全部隐藏；手机端主页显示三个胶囊按钮 —— */
 body.pc #screenMenu #btnMakeSkin,
 body.pc #screenMenu #btnSkinMarket,
 body.pc #screenMenu #btnManageSkin { display:none; }
