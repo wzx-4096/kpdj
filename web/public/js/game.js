@@ -3378,14 +3378,14 @@
                 authSave(data.token,data.user);
                 document.getElementById('accPass').value='';
                 const p2el=document.getElementById('accPass2'); if(p2el) p2el.value='';
-                sfxClick(); friendsRefreshBadge();
+                sfxClick(); friendsRefreshBadge(); presencePing();
             }catch(e){ authErr(e.message); }
             finally{ if(btn) btn.disabled=false; }
         }
         function authInit(){
             authRead(); authRender();
             if(!authToken) return;
-            authApi('/auth/me').then(d=>{ authUser=d.user; authRender(); storySync(); friendsRefreshBadge(); }).catch(e=>{ if(e.status===401) authSave('',null); });
+            authApi('/auth/me').then(d=>{ authUser=d.user; authRender(); storySync(); friendsRefreshBadge(); presencePing(); }).catch(e=>{ if(e.status===401) authSave('',null); });
         }
 
         // ---------- 账号设置 ----------
@@ -3470,6 +3470,24 @@
         }
 
         // ---------- 好友 ----------
+        let presenceCache={}, presenceAt=0;
+        async function presencePing(){
+            if(!authToken) return;
+            try{ await authApi('/presence',{method:'POST',body:{}}); }catch(e){}
+        }
+        async function presenceLoad(force){
+            if(!authToken) return;
+            const now=Date.now();
+            if(!force&&now-presenceAt<6000) return;          // 好友页每 5 秒轮询，状态请求做节流
+            presenceAt=now;
+            const pids=(friendsCache.friends||[]).map(f=>f.pid).filter(Boolean);
+            if(!pids.length){ presenceCache={}; return; }
+            try{
+                const d=await authApi('/presence?pids='+encodeURIComponent(pids.join(',')));
+                presenceCache=d.presence||{};
+                renderFriends();
+            }catch(e){}
+        }
         function frAvatarEl(item){
             if(item&&item.avatar){ const im=document.createElement('img'); im.className='fr-avatar'; im.src=item.avatar; im.alt=''; return im; }
             const d=document.createElement('div'); d.className='fr-avatar-fallback';
@@ -3481,11 +3499,22 @@
             b.addEventListener('click',ev=>{ ev.stopPropagation(); sfxClick(); fn(b); });
             return b;
         }
-        function frRow(item,subText,actions){
+        function frRow(item,subText,actions,presence){
             const row=document.createElement('div'); row.className='fr-row';
-            row.appendChild(frAvatarEl(item));
+            const wrap=document.createElement('div');
+            wrap.className='fr-avatar-wrap'+(presence?(presence.online?' is-online':' is-offline'):'');
+            wrap.appendChild(frAvatarEl(item));
+            if(presence){ const dot=document.createElement('span'); dot.className='fr-dot'; wrap.appendChild(dot); }
+            row.appendChild(wrap);
             const main=document.createElement('div'); main.className='fr-main';
-            const nm=document.createElement('div'); nm.className='fr-name'; nm.textContent=displayName(item);
+            const nm=document.createElement('div'); nm.className='fr-name';
+            const nt=document.createElement('span'); nt.className='fr-name-text'; nt.textContent=displayName(item); nm.appendChild(nt);
+            if(presence){
+                const st=document.createElement('span');
+                st.className='fr-status'+(presence.online?' is-online':'');
+                st.textContent=presence.online?'在线':'离线';
+                nm.appendChild(st);
+            }
             const sb=document.createElement('div'); sb.className='fr-subline'; sb.textContent=subText||('@'+item.username);
             main.appendChild(nm); main.appendChild(sb); row.appendChild(main);
             if(actions&&actions.length){ const act=document.createElement('div'); act.className='fr-actions'; actions.forEach(a=>act.appendChild(a)); row.appendChild(act); }
@@ -3501,11 +3530,12 @@
             if(!authUser){ const fb=document.getElementById('friendBadge'); if(fb) fb.style.display='none'; return; }
             try{ const d=await authApi('/messages/unread'); const fb=document.getElementById('friendBadge'); if(fb){ fb.textContent=d.total||0; fb.style.display=d.total?'':'none'; } }catch(e){}
         }
-        async function friendsLoad(){
+        async function friendsLoad(force){
             if(!authUser) return;
             const d=await authApi('/friends');
             friendsCache={friends:d.friends||[],incoming:d.incoming||[],outgoing:d.outgoing||[],unread:d.unread||{total:0,by:{}}};
             renderFriends(); updateFriendBadges();
+            presenceLoad(force).catch(()=>{});
         }
         function renderFriends(){
             const list=document.getElementById('frList'); if(!list) return;
@@ -3530,7 +3560,8 @@
                     }));
                 }
                 acts.push(chat,del);
-                const row=frRow(f,'@'+f.username+(f.room&&f.room.id?' · 🎮 房间 '+f.room.id:'')+(f.unread?' · '+f.unread+' 条未读':''),acts);
+                const present=presenceCache[f.pid];
+                const row=frRow(f,'@'+f.username+(f.room&&f.room.id?' · 🎮 房间 '+f.room.id:'')+(f.unread?' · '+f.unread+' 条未读':''),acts,present||null);
                 row.style.cursor='pointer';
                 row.addEventListener('click',()=>chatOpen(f.pid,displayName(f)));
                 list.appendChild(row);
@@ -3567,7 +3598,7 @@
             if(!authUser){ authErr('请先登录后使用好友功能'); showScreen(document.getElementById('screenAccount')); return; }
             friendsSetTab('list');
             showScreen(document.getElementById('screenFriends'));
-            friendsLoad().catch(e=>{
+            friendsLoad(true).catch(e=>{
                 const empty=document.getElementById('frEmpty'); if(empty){ empty.textContent=e.message; empty.style.display=''; }
             });
         }
@@ -4507,6 +4538,13 @@
         document.getElementById('btnRoomCreate').addEventListener('click',()=>{ sfxClick(); roomCreate(); });
         document.getElementById('btnRoomLeave').addEventListener('click',()=>{ sfxClick(); roomLeave(); });
         document.getElementById('btnRoomCopy').addEventListener('click',roomCopy);
+        // 在线状态心跳：登录后每 40 秒上报一次；切回前台立即补报并刷新好友状态
+        setInterval(()=>{ if(authUser&&!document.hidden) presencePing(); },40000);
+        document.addEventListener('visibilitychange',()=>{
+            if(document.hidden||!authUser) return;
+            presencePing();
+            if(document.getElementById('screenFriends').classList.contains('active')) presenceLoad(true).catch(()=>{});
+        });
         setInterval(()=>{
             if(!authUser||onlineStarted) return;
             if(!document.getElementById('screenFriends').classList.contains('active')) return;

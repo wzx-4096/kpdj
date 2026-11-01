@@ -114,4 +114,10 @@ CREATE TABLE IF NOT EXISTS skins (
 CREATE INDEX IF NOT EXISTS idx_skins_role ON skins(role);
 CREATE INDEX IF NOT EXISTS idx_skins_created ON skins(created_at);
 
+-- 玩家在线状态：客户端定时心跳写入，好友页读取（超过 100 秒无心跳视为离线）
+CREATE TABLE IF NOT EXISTS player_presence (
+  pid       TEXT PRIMARY KEY,
+  last_seen INTEGER NOT NULL                -- Unix 秒
+);
+
 
