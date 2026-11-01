@@ -686,16 +686,18 @@ body.pc .pc-card-skill { color:#9aa3c2; font-size:11px; line-height:1.6; text-al
 /* 右侧：开始按钮 + 2×3 操作区，统一宽度对齐 */
 body.pc #screenMenu .menu-actions {
     grid-column:2; grid-row:2; align-self:center; justify-self:stretch;
-    display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); grid-template-rows:auto auto auto auto;
+    display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); grid-template-rows:auto auto auto auto auto;
     gap:14px; width:100%; max-width:640px;
 }
 body.pc #screenMenu .menu-actions > #btnStartGame { grid-area:1/1/2/3; height:78px; font-size:22px; letter-spacing:2px; border-radius:18px; color:#15152a; border-color:#ffe9b0; background:linear-gradient(135deg,#f8dc96,#e3ab3c); box-shadow:0 14px 34px rgba(240,192,96,0.32); }
 body.pc #screenMenu .menu-actions > #btnStartGame:hover { transform:translateY(-3px); filter:brightness(1.06); box-shadow:0 18px 44px rgba(240,192,96,0.45); }
-body.pc #screenMenu #btnShowRules { grid-area:2/1; }
-body.pc #screenMenu #btnFullscreen { grid-area:2/2; }
-body.pc #screenMenu #btnSupport { grid-area:3/1; }
-body.pc #screenMenu #btnFriends { grid-area:3/2; }
-body.pc #screenMenu #btnAccount { grid-area:4/1/5/3; }
+body.pc #screenMenu #btnMakeSkin { grid-area:2/1; }
+body.pc #screenMenu #btnSkinMarket { grid-area:2/2; }
+body.pc #screenMenu #btnShowRules { grid-area:3/1; }
+body.pc #screenMenu #btnFullscreen { grid-area:3/2; }
+body.pc #screenMenu #btnSupport { grid-area:4/1; }
+body.pc #screenMenu #btnFriends { grid-area:4/2; }
+body.pc #screenMenu #btnAccount { grid-area:5/1/6/3; }
 body.pc #screenMenu .menu-actions > .btn-sm { width:100%; min-width:0; height:60px; margin:0; font-size:15px; border-radius:16px; }
 body.pc #screenMenu #versionLabel { grid-column:1/-1; grid-row:3; justify-self:center; font-size:12px !important; color:#6b7390 !important; margin-top:10px; }
 
@@ -865,7 +867,7 @@ body.pc .dlg-speaker b { font-size:15px; }
 /* ============================================================
    角色皮肤：制作 / 本地皮肤库 / 皮肤市场
    ============================================================ */
-.skin-entry { border-color:rgba(240,192,96,0.42); background:linear-gradient(135deg,rgba(240,192,96,0.16),rgba(125,90,158,0.2)); }
+body.pc .skin-entry { border-color:rgba(240,192,96,0.42); background:linear-gradient(135deg,rgba(240,192,96,0.16),rgba(125,90,158,0.2)); }
 #screenSkinEdit.active { width:100%; }
 .skin-hint { color:#9aa3c2; font-size:12px; text-align:center; line-height:1.6; }
 .skin-pick-view { width:100%; display:flex; flex-direction:column; align-items:center; gap:12px; }
@@ -940,14 +942,30 @@ body.pc .dlg-speaker b { font-size:15px; }
 .skin-avatar { object-fit:cover; border-radius:50%; vertical-align:middle; display:inline-block; background:#111; }
 
 /* 电脑端：更多按钮 + 弹层、编辑器双栏、市场四列 */
-body.pc #screenMenu #btnPcMore { position:absolute; right:0; bottom:0; z-index:12; display:flex; align-items:center; justify-content:center; width:56px; height:56px; min-width:0; padding:0; margin:0; border-radius:50%; background:rgba(255,255,255,0.05); border:1px solid rgba(240,192,96,0.26); box-shadow:0 8px 22px rgba(0,0,0,0.4); }
+body.pc #screenMenu #btnPcMore { --more-size:56px; position:absolute; right:0; bottom:4px; z-index:12; display:flex; align-items:center; justify-content:center; width:var(--more-size); height:var(--more-size); min-width:0; padding:0; margin:0; border-radius:50%; background:rgba(255,255,255,0.05); border:1px solid rgba(240,192,96,0.26); box-shadow:0 8px 22px rgba(0,0,0,0.4); transition:opacity .18s ease, transform .18s ease, border-color .2s; }
 body.pc #screenMenu #btnPcMore:hover { transform:translateY(-2px); border-color:var(--gold); }
 body.pc #screenMenu #btnPcMore:active { transform:scale(0.94); }
+body.pc #screenMenu #btnPcMore.morph-away { opacity:0; pointer-events:none; }
 .pc-more-dots { display:flex; align-items:center; gap:4px; }
 .pc-more-dots i { width:5px; height:5px; border-radius:50%; background:#e8edff; display:block; }
-body.pc #pcMorePanel { position:absolute; right:0; bottom:72px; z-index:20; display:none; flex-direction:column; gap:9px; padding:12px; border-radius:18px; background:rgba(16,18,34,0.96); border:1px solid rgba(240,192,96,0.3); box-shadow:0 18px 48px rgba(0,0,0,0.6); }
-body.pc #pcMorePanel.open { display:flex; }
-body.pc #pcMorePanel .btn { min-width:176px !important; height:48px; margin:0; padding:0 14px; font-size:13px; border-radius:12px; }
+/* 流体形变（Fluid Morph）：圆形按钮 ↔ 弹窗面板，尺寸/圆角走高阻尼曲线 */
+body.pc #pcMorePanel {
+    --more-size:56px;
+    position:absolute; right:0; bottom:4px; z-index:20;
+    display:flex; flex-direction:column; justify-content:center; gap:9px;
+    width:var(--more-size); height:var(--more-size); padding:0; box-sizing:border-box; overflow:hidden;
+    border-radius:50%; background:rgba(16,18,34,0.96); border:1px solid rgba(240,192,96,0.3);
+    box-shadow:0 18px 48px rgba(0,0,0,0.6);
+    opacity:0; pointer-events:none; transform:translateZ(0);
+    transition:width .46s cubic-bezier(.22,1,.36,1), height .46s cubic-bezier(.22,1,.36,1),
+               padding .46s cubic-bezier(.22,1,.36,1), border-radius .46s cubic-bezier(.22,1,.36,1),
+               opacity .16s ease;
+}
+body.pc #pcMorePanel.open {
+    width:202px; height:188px; padding:12px; border-radius:18px; opacity:1; pointer-events:auto;
+}
+body.pc #pcMorePanel .btn { min-width:176px !important; height:48px; margin:0; padding:0 14px; font-size:13px; border-radius:12px; opacity:0; transform:translateY(10px) scale(.96); transition:opacity .18s ease, transform .3s cubic-bezier(.22,1,.36,1); }
+body.pc #pcMorePanel.open .btn { opacity:1; transform:none; transition-delay:.14s; }
 body.pc #screenSkinEdit.active, body.pc #screenSkinMarket.active { width:min(100%,1160px); gap:18px; }
 body.pc .skin-role-grid { grid-template-columns:repeat(auto-fill,minmax(124px,1fr)); max-height:58vh; }
 body.pc .skin-role-card { padding:12px 8px; }
@@ -958,15 +976,14 @@ body.pc .skin-market-grid { grid-template-columns:repeat(auto-fill,minmax(178px,
 body.pc .skin-market-panel { padding:18px; }
 body.pc .skin-market-actions .btn { min-width:180px; height:48px; }
 body.pc .skin-market-head { flex-wrap:nowrap; }
-body.pc #screenMenu #btnPcMore { bottom:4px; }
 @media (max-width:960px) {
     body.pc .skin-editor-main { grid-template-columns:1fr; justify-items:center; }
     body.pc .skin-side { max-width:512px; }
     body.pc .skin-market-grid { grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); }
 }
 @media (max-width:860px) {
-    body.pc #screenMenu #btnPcMore { width:44px; height:44px; bottom:2px; }
-    body.pc #pcMorePanel { bottom:58px; }
+    body.pc #screenMenu #btnPcMore { --more-size:44px; bottom:2px; }
+    body.pc #pcMorePanel { --more-size:44px; bottom:2px; }
 }
 @media (max-width:560px) {
     .skin-role-grid { grid-template-columns:repeat(auto-fill,minmax(84px,1fr)); }
@@ -990,9 +1007,7 @@ body.pc .skin-sort-row .btn { padding:0 10px; border-radius:10px; }
 body.pc .skin-card-actions .btn { padding:0 4px; border-radius:9px; }
 body.pc #pcMorePanel .btn { white-space:nowrap; }
 
-/* —— 皮肤入口：手机端在主页显示，电脑端一律收进「更多」 —— */
-body.pc #screenMenu #btnMakeSkin,
-body.pc #screenMenu #btnSkinMarket,
+/* —— 皮肤入口：电脑端主页保留制作/市场，管理收进「更多」；手机端三个都在主页 —— */
 body.pc #screenMenu #btnManageSkin { display:none; }
 body.pc #screenSkinManage.active { width:min(100%,1160px); gap:18px; }
 body.pc #screenSkinManage .skin-market-grid { grid-template-columns:repeat(auto-fill,minmax(178px,1fr)); max-height:56vh; }

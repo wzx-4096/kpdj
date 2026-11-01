@@ -2729,7 +2729,7 @@
             el.textContent=msg||''; el.classList.add('show');
             clearTimeout(skinToastTimer); skinToastTimer=setTimeout(()=>el.classList.remove('show'),1900);
         }
-        function skinCloseMore(){ const p=document.getElementById('pcMorePanel'); if(p) p.classList.remove('open'); }
+        function skinCloseMore(){ const p=document.getElementById('pcMorePanel'); if(p) p.classList.remove('open'); const b=document.getElementById('btnPcMore'); if(b) b.classList.remove('morph-away'); }
 
         // ---------- 本地皮肤存储（IndexedDB） ----------
         function skinDb(){
@@ -3219,12 +3219,21 @@
             on('pcMoreSkinMarket',()=>{ sfxClick(); skinCloseMore(); showScreen(document.getElementById('screenSkinMarket')); });
             on('btnManageSkin',()=>{ sfxClick(); skinCloseMore(); showScreen(document.getElementById('screenSkinManage')); });
             on('pcMoreManageSkin',()=>{ sfxClick(); skinCloseMore(); showScreen(document.getElementById('screenSkinManage')); });
-            on('btnPcMore',e=>{ e.stopPropagation(); sfxClick(); const p=document.getElementById('pcMorePanel'); if(p) p.classList.toggle('open'); });
+            on('btnPcMore',e=>{
+                e.stopPropagation(); sfxClick();
+                const p=document.getElementById('pcMorePanel');
+                if(!p) return;
+                const open=!p.classList.contains('open');
+                p.classList.toggle('open',open);
+                const b=document.getElementById('btnPcMore');
+                if(b) b.classList.toggle('morph-away',open);
+            });
             document.addEventListener('click',e=>{
                 const p=document.getElementById('pcMorePanel'), b=document.getElementById('btnPcMore');
                 if(!p||!p.classList.contains('open')) return;
                 if(p.contains(e.target)||(b&&b.contains(e.target))) return;
                 p.classList.remove('open');
+                if(b) b.classList.remove('morph-away');
             });
             on('btnSkinPickBack',()=>{ sfxClick(); showScreen(document.getElementById('screenMenu')); });
             on('btnSkinEditBack',()=>{ sfxClick(); skinOpenPicker(); });
