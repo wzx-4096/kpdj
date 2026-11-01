@@ -2496,6 +2496,20 @@
         // ============ 假AI客服 ============
         const csMsgs=document.getElementById('csMsgs'), csInput=document.getElementById('csInput'), csSend=document.getElementById('csSend');
         let csTimer=null, csBusy=false, csGreeted=false;
+        // 嘉泽战歌：客服对话里提到李嘉泽相关关键词时播放（public/audio/lijiaze.mp3）
+        const CS_LZ_RE=/李嘉泽|嘉泽|呼噜睡侠|打鼾|Z字弹/i;
+        let csLzSnd=null;
+        function csLzSndGet(){
+            if(!csLzSnd){ csLzSnd=new Audio('./audio/lijiaze.mp3'); csLzSnd.volume=1; csLzSnd.preload='auto'; }
+            return csLzSnd;
+        }
+        function csLzSongPlay(){
+            try{
+                const a=csLzSndGet();
+                a.pause(); a.currentTime=0;
+                const p=a.play(); if(p&&p.catch) p.catch(()=>{});
+            }catch(e){}
+        }
         function csScroll(){ csMsgs.scrollTop=csMsgs.scrollHeight; }
         function csPush(text,me){
             const d=document.createElement('div');
@@ -2539,12 +2553,14 @@
             csPush(v,true); sfxClick();
             csInput.value='';
             supportSend(v);
+            if(CS_LZ_RE.test(v)) csLzSongPlay();
             csReply(v);
         }
         csSend.addEventListener('click',csSendMsg);
         csInput.addEventListener('keydown',(e)=>{ if(e.key==='Enter') csSendMsg(); });
         document.getElementById('btnSupport').addEventListener('click',()=>{
             sfxClick(); showScreen(document.getElementById('screenSupport'));
+            csLzSndGet();                                   // 进客服页预加载嘉泽战歌
             if(!csGreeted){ csGreeted=true;
                 csPush('您好～我是官方客服小卡🎧',false);
                 csThinkThen('很高兴为您服务！有任何关于游戏的建议、想反馈的问题，都可以告诉我哦～');
