@@ -3214,6 +3214,55 @@
             else if(act==='unequip'){ sfxClick(); skinEquipRole(rec.roleId,''); skinToast('已取消装备'); skinRefreshMenuRole(); renderMarket(); renderMine(); renderSkinManage(); }
             else if(act==='pub'){ sfxClick(); skinPublishRecord(rec); }
         }
+        // 一键抠图：从四角向内洪水填充相近底色，返回透明背景的新图（四角已透明则返回 null）
+        function skinRemoveBg(src){
+            const w=src.naturalWidth||src.width||512, h=src.naturalHeight||src.height||512;
+            const sc=Math.min(1,512/Math.max(w,h));
+            const cw=Math.max(1,Math.round(w*sc)), ch=Math.max(1,Math.round(h*sc));
+            const c=document.createElement('canvas'); c.width=cw; c.height=ch;
+            const x=c.getContext('2d',{willReadFrequently:true});
+            x.drawImage(src,0,0,cw,ch);
+            let d;
+            try{ d=x.getImageData(0,0,cw,ch); }catch(e){ return null; }
+            const px=d.data, at=(i,j)=>(j*cw+i)*4;
+            const cs=[[0,0],[cw-1,0],[0,ch-1],[cw-1,ch-1]];
+            const bg=[];
+            cs.forEach(cc=>{ const p=at(cc[0],cc[1]); if(px[p+3]>10) bg.push([px[p],px[p+1],px[p+2]]); });
+            if(!bg.length) return null;
+            const tol=46, tol2=tol*tol*3;
+            const near=p=>{
+                for(let k=0;k<bg.length;k++){
+                    const b=bg[k], dr=px[p]-b[0], dg=px[p+1]-b[1], db=px[p+2]-b[2];
+                    if(dr*dr+dg*dg+db*db<=tol2) return true;
+                }
+                return false;
+            };
+            const seen=new Uint8Array(cw*ch), stack=[];
+            cs.forEach(cc=>{ const p=at(cc[0],cc[1]); if(px[p+3]>10&&near(p)) stack.push(cc[1]*cw+cc[0]); });
+            while(stack.length){
+                const n=stack.pop();
+                if(seen[n]) continue; seen[n]=1;
+                const i=n%cw, j=(n-i)/cw, p=at(i,j);
+                if(!near(p)) continue;
+                px[p+3]=0;
+                if(i>0) stack.push(n-1);
+                if(i<cw-1) stack.push(n+1);
+                if(j>0) stack.push(n-cw);
+                if(j<ch-1) stack.push(n+cw);
+            }
+            // 边缘羽化：紧贴透明区且接近底色的像素降低不透明度，去掉一圈白边/底色残留
+            for(let j=0;j<ch;j++){
+                for(let i=0;i<cw;i++){
+                    const p=at(i,j);
+                    if(px[p+3]===0) continue;
+                    const edge=(i>0&&px[at(i-1,j)+3]===0)||(i<cw-1&&px[at(i+1,j)+3]===0)
+                        ||(j>0&&px[at(i,j-1)+3]===0)||(j<ch-1&&px[at(i,j+1)+3]===0);
+                    if(edge&&near(p)) px[p+3]=Math.round(px[p+3]*0.35);
+                }
+            }
+            x.putImageData(d,0,0);
+            return c;
+        }
         function skinReadLocalFile(file){
             if(!file) return;
             if(!/^image\/(png|jpeg|webp)$/.test(file.type)){ skinToast('只支持 PNG / JPG / WebP 图片'); return; }
@@ -3221,7 +3270,7 @@
             fr.onload=()=>{
                 const im=new Image();
                 im.onload=()=>{
-                    skinSticker={ img:im, x:256, y:256, scale:0.7 }; skinStickerDrag=null;
+                    skinSticker={ img:im, orig:im, x:256, y:256, scale:0.7 }; skinStickerDrag=null;
                     const bar=document.getElementById('skinStickerBar'); if(bar) bar.style.display='flex';
                     const sc=document.getElementById('skinStickerScale'); if(sc) sc.value='70';
                     skinRedraw(); skinToast('拖动图片定位，点「放置」确认');
@@ -3265,6 +3314,14 @@
             on('btnSkinBrush',()=>{ sfxClick(); skinSetTool('brush'); });
             on('btnSkinEraser',()=>{ sfxClick(); skinSetTool('eraser'); });
             on('btnSkinUpload',()=>{ sfxClick(); const f=document.getElementById('skinFile'); if(f) f.click(); });
+            on('btnSkinCutout',()=>{
+                if(!skinSticker){ skinToast('请先上传一张图片'); return; }
+                const src=skinSticker.orig||skinSticker.img;
+                const out=skinRemoveBg(src);
+                if(!out){ skinToast('这张图片已经是透明背景啦'); return; }
+                skinSticker.img=out; skinSticker.orig=src;
+                skinRedraw(); sfxClick(); skinToast('抠图完成，透明背景会保留');
+            });
             const sf=document.getElementById('skinFile');
             if(sf) sf.addEventListener('change',e=>{ const f=e.target.files&&e.target.files[0]; skinReadLocalFile(f); e.target.value=''; });
             const sk=document.getElementById('skinCanvas');
