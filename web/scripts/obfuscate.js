@@ -130,6 +130,14 @@ function main() {
       console.log('COPY audio →', audioDst, '=', files.join(', '));
     }
   }
+
+  // 10) 网站图标（favicon.png / apple-touch-icon.png）
+  for (const f of ['favicon.png', 'apple-touch-icon.png']) {
+    const iconSrc = path.join(PUB, f);
+    if (!fs.existsSync(iconSrc)) continue;
+    fs.copyFileSync(iconSrc, path.join(DIST, f));
+    console.log('COPY ' + f + ' →', DIST);
+  }
 }
 
 main();
