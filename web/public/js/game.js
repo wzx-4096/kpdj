@@ -48,7 +48,7 @@
             uiIconOn=!!on;
             try{ localStorage.setItem('uiIconStyle',uiIconOn?'1':'0'); }catch(e){}
             applyUiIcons(document);
-            const tg=document.getElementById('btnUiIconsToggle'); if(tg) tg.classList.toggle('on',uiIconOn);
+            const tg=document.getElementById('btnClassicToggle'); if(tg) tg.classList.toggle('on',!uiIconOn);
         }
         const uiIconObserver=new MutationObserver(muts=>{
             if(!uiIconOn) return;
@@ -56,9 +56,9 @@
         });
         function initUiIcons(){
             applyUiIcons(document);
-            const tg=document.getElementById('btnUiIconsToggle');
+            const tg=document.getElementById('btnClassicToggle');
             if(tg){
-                tg.classList.toggle('on',uiIconOn);
+                tg.classList.toggle('on',!uiIconOn);
                 tg.addEventListener('click',()=>{ sfxClick(); setUiIcons(!uiIconOn); });
             }
             try{ uiIconObserver.observe(document.body,{childList:true,subtree:true}); }catch(e){}
@@ -2940,7 +2940,7 @@
         }
         function skinStickerSize(){
             if(!skinSticker) return 0;
-            return Math.max(24,Math.min(512,512*0.6*(skinSticker.scale||0.7)));
+            return Math.max(16,Math.min(1024,512*0.6*(skinSticker.scale||0.7)));
         }
         function skinPoint(e){
             const cv=document.getElementById('skinCanvas'); const r=cv.getBoundingClientRect();

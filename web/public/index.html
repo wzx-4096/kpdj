@@ -297,7 +297,7 @@
             <button class="btn btn-sm btn-info" id="pcMoreSkinMarket"><span class="uic-slot" data-ic="shopping-bag" data-emoji="🛍️">🛍️</span> 皮肤市场</button>
             <button class="btn btn-sm btn-success" id="pcMoreManageSkin"><span class="uic-slot" data-ic="toolbox" data-emoji="🧰">🧰</span> 皮肤管理</button>
         </div>
-        <div style="color:#667;font-size:10px;" id="versionLabel">v9.37 · 统一图标</div>
+        <div style="color:#667;font-size:10px;" id="versionLabel">v9.38 · 图标对齐优化</div>
     </div>
     <div class="screen" id="screenSupport">
         <div class="game-title" style="font-size:20px;"><span class="uic-slot" data-ic="message-circle" data-emoji="💬">💬</span> 在线客服</div>
@@ -456,6 +456,13 @@
             </div>
             <div style="color:#8a93b8;font-size:10px;padding:2px 2px 6px;border-bottom:1px solid rgba(255,255,255,0.12);">开启后模式选择页以三合一代替自由/双人/大乱斗</div>
         </div>
+        <div class="modal-box" style="width:90%;max-width:320px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 2px;">
+                <span style="color:#fff;font-size:13px;font-weight:700;"><span class="uic-slot" data-ic="sparkles" data-emoji="✨">✨</span> 经典样式</span>
+                <button id="btnClassicToggle" class="light-toggle" type="button"><span class="knob"></span></button>
+            </div>
+            <div style="color:#8a93b8;font-size:10px;padding:2px 2px 6px;border-bottom:1px solid rgba(255,255,255,0.12);">开启后恢复经典表情图标，关闭时使用统一线性图标</div>
+        </div>
         <div class="set-item pc-only" id="pcKeyHint"><span><span class="uic-slot" data-ic="keyboard" data-emoji="⌨️">⌨️</span> 电脑端操作</span><span style="font-size:11px;color:#8a93b8;font-weight:400;">WASD 移动 · 鼠标瞄准 · 左键 / 空格发射</span></div>
         <div class="set-item" id="btnJoySetting"><span><span class="uic-slot" data-ic="gamepad-2" data-emoji="🕹️">🕹️</span> 摇杆设置</span><span class="arr">›</span></div>
         <div class="set-item" id="btnAccountSetting"><span><span class="uic-slot" data-ic="user" data-emoji="👤">👤</span> 账号设置</span><span class="arr">›</span></div>
@@ -469,10 +476,6 @@
             <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 2px;">
                 <span style="color:#fff;font-size:13px;font-weight:700;">开启开发者选项</span>
                 <button id="btnDevToggle" class="light-toggle" type="button"><span class="knob"></span></button>
-            </div>
-            <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 2px 4px;border-top:1px solid rgba(255,255,255,0.12);margin-top:8px;">
-                <span style="color:#fff;font-size:13px;font-weight:700;"><span class="uic-slot" data-ic="sparkles" data-emoji="✨">✨</span> 统一图标风格</span>
-                <button id="btnUiIconsToggle" class="light-toggle" type="button"><span class="knob"></span></button>
             </div>
             <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 2px 4px;border-top:1px solid rgba(255,255,255,0.12);margin-top:8px;">
                 <span style="color:#fff;font-size:13px;font-weight:700;"><span class="uic-slot" data-ic="film" data-emoji="🎬">🎬</span> 更多动画</span>
@@ -594,7 +597,7 @@
                     <canvas id="skinCanvas" width="512" height="512"></canvas>
                     <div class="skin-sticker-bar" id="skinStickerBar" style="display:none;">
                         <span>缩放</span>
-                        <input type="range" id="skinStickerScale" min="40" max="160" value="70">
+                        <input type="range" id="skinStickerScale" min="20" max="300" value="70">
                         <button class="btn btn-sm" id="btnSkinCutout"><span class="uic-slot" data-ic="scissors" data-emoji="✂">✂</span> 抠图</button>
                         <button class="btn btn-sm btn-success" id="btnSkinStickerApply">放置</button>
                         <button class="btn btn-sm" id="btnSkinStickerCancel">取消</button>
