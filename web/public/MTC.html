@@ -56,7 +56,7 @@
 <body>
 <div class="card">
     <h1>🛠 MTC 管理后台</h1>
-    <div class="sub">管理员入口 · 与玩家账号完全独立 · v1.3 玩家管理员</div>
+    <div class="sub">管理员/员工入口 · 与玩家账号完全独立 · v1.4 玩家管理员</div>
 
     <!-- 登录 -->
     <div id="loginView">
@@ -97,9 +97,9 @@
 (function () {
     'use strict';
     var API = '/api';
-    var TOKEN_KEY = 'mtcAdminToken';
-    var token = '';
-    try { token = sessionStorage.getItem(TOKEN_KEY) || ''; } catch (e) { token = ''; }
+    var TOKEN_KEY = 'mtcAdminToken', ROLE_KEY = 'mtcAdminRole';
+    var token = '', role = '';
+    try { token = sessionStorage.getItem(TOKEN_KEY) || ''; role = sessionStorage.getItem(ROLE_KEY) || ''; } catch (e) { token = ''; role = ''; }
 
     var loginView = document.getElementById('loginView');
     var adminView = document.getElementById('adminView');
@@ -119,9 +119,13 @@
     var tabSupport = document.getElementById('tabSupport');
     var deleting = false, roleBusy = false, autoTimer = null, lastSig = '', lastSupSig = '', tabMode = 'players';
 
-    function saveToken(t) {
+    function saveToken(t, r) {
         token = t || '';
-        try { if (token) sessionStorage.setItem(TOKEN_KEY, token); else sessionStorage.removeItem(TOKEN_KEY); } catch (e) {}
+        role = r || '';
+        try {
+            if (token) sessionStorage.setItem(TOKEN_KEY, token); else sessionStorage.removeItem(TOKEN_KEY);
+            if (role) sessionStorage.setItem(ROLE_KEY, role); else sessionStorage.removeItem(ROLE_KEY);
+        } catch (e) {}
     }
 
     function api(path, opts) {
@@ -291,6 +295,7 @@
             list.appendChild(loading);
         }
         api('/admin/players?limit=200').then(function (data) {
+            if (data.role && data.role !== role) saveToken(token, data.role);
             var players = data.players || [];
             if (silent && sigOf(players) === lastSig) { touchLive(); return; }
             renderPlayers(players, data.total || 0);
@@ -309,7 +314,7 @@
     }
 
     function renderPlayers(players, total) {
-        count.textContent = '共 ' + total + ' 名玩家' + (players.length < total ? '（显示最近 ' + players.length + ' 名）' : '');
+        count.textContent = (role === 'admin' ? '共 ' : '员工模式 · 共 ') + total + ' 名玩家' + (players.length < total ? '（显示最近 ' + players.length + ' 名）' : '');
         lastSig = sigOf(players);
         list.innerHTML = '';
         if (!players.length) {
@@ -366,30 +371,33 @@
             info.appendChild(meta);
             row.appendChild(info);
 
-            var acts = document.createElement('div');
-            acts.className = 'acts';
+            if (role === 'admin') {                    // 员工只能查看，不能授予管理员或删除玩家
+                var acts = document.createElement('div');
+                acts.className = 'acts';
 
-            var roleBtn = document.createElement('button');
-            roleBtn.className = 'role';
-            roleBtn.type = 'button';
-            roleBtn.textContent = p.is_admin ? '取消管理员' : '设为管理员';
-            roleBtn.addEventListener('click', function () { toggleAdmin(p); });
-            acts.appendChild(roleBtn);
+                var roleBtn = document.createElement('button');
+                roleBtn.className = 'role';
+                roleBtn.type = 'button';
+                roleBtn.textContent = p.is_admin ? '取消管理员' : '设为管理员';
+                roleBtn.addEventListener('click', function () { toggleAdmin(p); });
+                acts.appendChild(roleBtn);
 
-            var del = document.createElement('button');
-            del.className = 'danger';
-            del.type = 'button';
-            del.textContent = '删除';
-            del.addEventListener('click', function () { removePlayer(p); });
-            acts.appendChild(del);
+                var del = document.createElement('button');
+                del.className = 'danger';
+                del.type = 'button';
+                del.textContent = '删除';
+                del.addEventListener('click', function () { removePlayer(p); });
+                acts.appendChild(del);
 
-            row.appendChild(acts);
+                row.appendChild(acts);
+            }
 
             list.appendChild(row);
         });
     }
 
     function removePlayer(p) {
+        if (role !== 'admin') return;
         var label = p.nickname || p.username;
         if (!confirm('确定删除玩家「' + label + '」（@' + p.username + '）？\n删除后该账号无法再登录，数据不可恢复。')) return;
         deleting = true;
@@ -406,6 +414,7 @@
     }
 
     function toggleAdmin(p) {
+        if (role !== 'admin') return;
         var next = !p.is_admin;
         var label = p.nickname || p.username;
         var tip = next
@@ -431,7 +440,7 @@
         btnLogin.disabled = true;
         loginErr.textContent = '';
         api('/admin/login', { method: 'POST', body: { password: password } }).then(function (data) {
-            saveToken(data.token);
+            saveToken(data.token, data.role || 'admin');
             btnLogin.disabled = false;
             showAdmin();
         }).catch(function (e) {
