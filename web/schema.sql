@@ -1,6 +1,8 @@
 -- ============ 卡牌对决 D1 表结构 ============
 -- 执行（线上）：wrangler d1 execute kpdj-db --remote --file=./schema.sql
 -- 执行（本地）：wrangler d1 execute kpdj-db --local  --file=./schema.sql
+-- 已有库升级：ALTER TABLE players ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0;
+--（API 首次访问时也会自动尝试补列，重复执行无副作用）
 
 CREATE TABLE IF NOT EXISTS players (
   pid            TEXT PRIMARY KEY,          -- p_ + sha1(小写账号) 前12位
@@ -9,6 +11,7 @@ CREATE TABLE IF NOT EXISTS players (
   pass_hash      TEXT NOT NULL,             -- pbkdf2$迭代数$盐$哈希，绝不存明文
   nickname       TEXT,                      -- 昵称（可与账号不同，未设置时用账号显示）
   avatar         TEXT,                      -- 头像 data URL（客户端压缩后的 base64）
+  is_admin       INTEGER NOT NULL DEFAULT 0, -- 1 = 管理员（MTC 后台设置；可强制下架皮肤 / 免同意加好友）
   created_at     INTEGER NOT NULL,          -- Unix 秒
   updated_at     INTEGER NOT NULL
 );

@@ -32,7 +32,8 @@
 //   POST   /api/admin/login     { password }
 //   GET    /api/admin/players   （Bearer 管理员 token）
 //   DELETE /api/admin/players/:pid（Bearer 管理员 token）
-// 环境变量/绑定：DB（D1）、SESSION_SECRET、ADMIN_PASS_HASH、STAFF_PASS_HASH、DEV_PASS_HASH、RELAY_SECRET、RELAY_URL、TRTC_SDKAPPID、TRTC_SECRET
+//   POST   /api/admin/players/:pid/admin { admin }（设置/取消玩家管理员）
+// 环境变量/绑定：DB（D1）、SESSION_SECRET、ADMIN_PASS_HASH、DEV_PASS_HASH、RELAY_SECRET、RELAY_URL、TRTC_SDKAPPID、TRTC_SECRET
 // 密码只存 PBKDF2-SHA256 哈希（pbkdf2$迭代数$盐$哈希），不存明文。
 
 const PBKDF2_ITER = 12000;                                  // Workers 免费版单次 10ms CPU，迭代数不能太高
@@ -141,7 +142,7 @@ function clampLimit(raw, def = 200, max = 500) {
   return Math.min(n, max);
 }
 function publicUser(row) {
-  return { pid: row.pid, username: row.username, nickname: row.nickname || row.username, avatar: row.avatar || '' };
+  return { pid: row.pid, username: row.username, nickname: row.nickname || row.username, avatar: row.avatar || '', is_admin: row.is_admin ? 1 : 0 };
 }
 function pairOf(a, b) {
   return a < b ? [a, b] : [b, a];
@@ -163,12 +164,22 @@ function nowSec() {
 }
 
 // ---------- 鉴权 ----------
+// 老库没有 players.is_admin 列时自动补上（只尝试一次，重复执行会被 catch 忽略）
+let adminColReady = false;
+async function ensureAdminColumn(env) {
+  if (adminColReady) return;
+  try {
+    await env.DB.prepare('ALTER TABLE players ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0').run();
+  } catch (e) { /* 列已存在 */ }
+  adminColReady = true;
+}
 async function requirePlayer(request, env) {
   if (!env.DB) return { error: fail('DB_NOT_BOUND', 'D1 数据库未绑定', 500) };
   if (!env.SESSION_SECRET) return { error: fail('NO_SESSION_SECRET', '服务端未配置 SESSION_SECRET', 500) };
   const payload = await verifyToken(bearer(request), env.SESSION_SECRET);
   if (!payload || payload.r !== 'player') return { error: fail('UNAUTHORIZED', '登录状态已失效，请重新登录', 401) };
-  const row = await env.DB.prepare('SELECT pid, username, nickname, avatar FROM players WHERE pid = ?').bind(payload.s).first();
+  await ensureAdminColumn(env);
+  const row = await env.DB.prepare('SELECT pid, username, nickname, avatar, is_admin FROM players WHERE pid = ?').bind(payload.s).first();
   if (!row) return { error: fail('UNAUTHORIZED', '账号不存在或已被删除', 401) };
   return { user: row };
 }
@@ -177,13 +188,6 @@ async function requireAdmin(request, env) {
   const payload = await verifyToken(bearer(request), env.SESSION_SECRET);
   if (!payload || payload.r !== 'admin') return { error: fail('UNAUTHORIZED', '管理员登录已失效，请重新登录', 401) };
   return { ok: true };
-}
-// 员工（低配）：能看玩家/客服消息，但不能删账号
-async function requireStaff(request, env) {
-  if (!env.SESSION_SECRET) return { error: fail('NO_SESSION_SECRET', '服务端未配置 SESSION_SECRET', 500) };
-  const payload = await verifyToken(bearer(request), env.SESSION_SECRET);
-  if (!payload || (payload.r !== 'admin' && payload.r !== 'staff')) return { error: fail('UNAUTHORIZED', '登录已失效，请重新登录', 401) };
-  return { ok: true, role: payload.r };
 }
 async function friendRow(env, a, b) {
   const [pa, pb] = pairOf(a, b);
@@ -225,7 +229,7 @@ async function handleRegister(request, env) {
   }
 
   const token = await signToken({ s: pid, n: username, r: 'player', e: now + TTL_PLAYER }, env.SESSION_SECRET);
-  return json({ token, user: { pid, username, nickname: username, avatar: '' } }, 201);
+  return json({ token, user: { pid, username, nickname: username, avatar: '', is_admin: 0 } }, 201);
 }
 
 async function handleLogin(request, env) {
@@ -238,7 +242,8 @@ async function handleLogin(request, env) {
   const password = String(body.password == null ? '' : body.password);
   if (!username || !password) return fail('INVALID_CREDENTIALS', '请输入账号和密码');
 
-  const row = await env.DB.prepare('SELECT pid, username, nickname, avatar, pass_hash FROM players WHERE username_lower = ?')
+  await ensureAdminColumn(env);
+  const row = await env.DB.prepare('SELECT pid, username, nickname, avatar, is_admin, pass_hash FROM players WHERE username_lower = ?')
     .bind(username.toLowerCase()).first();
   if (!row || !(await verifyPassword(password, row.pass_hash))) {
     return fail('INVALID_CREDENTIALS', '账号或密码错误', 401);
@@ -280,7 +285,7 @@ async function handleUpdateProfile(request, env) {
 
   await env.DB.prepare('UPDATE players SET nickname = ?, avatar = ?, updated_at = ? WHERE pid = ?')
     .bind(nickname, avatar, nowSec(), auth.user.pid).run();
-  return json({ user: publicUser({ pid: auth.user.pid, username: auth.user.username, nickname, avatar }) });
+  return json({ user: publicUser({ pid: auth.user.pid, username: auth.user.username, nickname, avatar, is_admin: auth.user.is_admin }) });
 }
 
 async function handleChangePassword(request, env) {
@@ -325,7 +330,7 @@ async function handleUserSearch(url, request, env) {
   const me = auth.user.pid;
 
   const rows = await env.DB.prepare(
-    `SELECT p.pid, p.username, p.nickname, p.avatar,
+    `SELECT p.pid, p.username, p.nickname, p.avatar, p.is_admin,
             f.requested_by, f.status
        FROM players p
        LEFT JOIN friendships f
@@ -338,6 +343,7 @@ async function handleUserSearch(url, request, env) {
 
   const users = ((rows && rows.results) || []).map(r => ({
     pid: r.pid, username: r.username, nickname: r.nickname || r.username, avatar: r.avatar || '',
+    is_admin: r.is_admin ? 1 : 0,
     relation: relationOf(r, me)
   }));
   return json({ users });
@@ -350,7 +356,7 @@ async function handleFriends(request, env) {
 
   const rows = await env.DB.prepare(
     `SELECT f.pid_a, f.pid_b, f.requested_by, f.status, f.updated_at,
-            p.pid AS o_pid, p.username AS o_username, p.nickname AS o_nickname, p.avatar AS o_avatar
+            p.pid AS o_pid, p.username AS o_username, p.nickname AS o_nickname, p.avatar AS o_avatar, p.is_admin AS o_is_admin
        FROM friendships f
        JOIN players p ON p.pid = CASE WHEN f.pid_a = ? THEN f.pid_b ELSE f.pid_a END
       WHERE f.pid_a = ? OR f.pid_b = ?`
@@ -360,7 +366,7 @@ async function handleFriends(request, env) {
   ((rows && rows.results) || []).forEach(r => {
     const item = {
       pid: r.o_pid, username: r.o_username, nickname: r.o_nickname || r.o_username,
-      avatar: r.o_avatar || '', since: r.updated_at
+      avatar: r.o_avatar || '', is_admin: r.o_is_admin ? 1 : 0, since: r.updated_at
     };
     if (r.status === 'accepted') friends.push(item);
     else if (r.requested_by === me) outgoing.push(item);
@@ -404,7 +410,22 @@ async function handleFriendRequest(request, env) {
 
   const row = await friendRow(env, auth.user.pid, target);
   const now = nowSec();
+  const forced = !!auth.user.is_admin;                        // 管理员加好友：无需对方同意，直接成为好友
   if (row && row.status === 'accepted') return fail('ALREADY_FRIENDS', '你们已经是好友了', 409);
+
+  if (forced) {
+    if (row) {
+      await env.DB.prepare('UPDATE friendships SET status = ?, updated_at = ? WHERE pid_a = ? AND pid_b = ?')
+        .bind('accepted', now, row.pid_a, row.pid_b).run();
+      return json({ status: 'accepted', forced: true });
+    }
+    const [pa, pb] = pairOf(auth.user.pid, target);
+    await env.DB.prepare(
+      'INSERT INTO friendships (pid_a, pid_b, requested_by, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)'
+    ).bind(pa, pb, auth.user.pid, 'accepted', now, now).run();
+    return json({ status: 'accepted', forced: true }, 201);
+  }
+
   if (row && row.requested_by === auth.user.pid) return fail('REQUEST_SENT', '好友申请已发送', 409);
   if (row) {
     await env.DB.prepare('UPDATE friendships SET status = ?, updated_at = ? WHERE pid_a = ? AND pid_b = ?')
@@ -858,7 +879,7 @@ async function handleSupportMsg(request, env) {
 }
 async function handleAdminSupport(url, request, env) {
   if (!env.DB) return fail('DB_NOT_BOUND', 'D1 数据库未绑定', 500);
-  const auth = await requireStaff(request, env);
+  const auth = await requireAdmin(request, env);
   if (auth.error) return auth.error;
 
   const limit = clampLimit(url.searchParams.get('limit'), 100, 300);
@@ -929,43 +950,55 @@ async function handleDevAuth(request, env) {
 // ---------- 管理员 ----------
 async function handleAdminLogin(request, env) {
   if (!env.SESSION_SECRET) return fail('NO_SESSION_SECRET', '服务端未配置 SESSION_SECRET', 500);
-  if (!env.ADMIN_PASS_HASH && !env.STAFF_PASS_HASH) return fail('NO_ADMIN_HASH', '服务端未配置管理员密码', 500);
+  if (!env.ADMIN_PASS_HASH) return fail('NO_ADMIN_HASH', '服务端未配置 ADMIN_PASS_HASH', 500);
 
   const body = await readJson(request);
   if (!body) return fail('INVALID_BODY', '请求体必须为 JSON');
   const password = String(body.password == null ? '' : body.password);
   if (!password) return fail('INVALID_CREDENTIALS', '请输入管理员密码');
+  if (!(await verifyPassword(password, env.ADMIN_PASS_HASH))) return fail('INVALID_CREDENTIALS', '管理员密码错误', 401);
 
-  // 管理员密码优先；不是管理员再试员工密码（员工不能删账号）
-  if (env.ADMIN_PASS_HASH && (await verifyPassword(password, env.ADMIN_PASS_HASH))) {
-    const token = await signToken({ s: 'admin', r: 'admin', e: nowSec() + TTL_ADMIN }, env.SESSION_SECRET);
-    return json({ token, role: 'admin' });
-  }
-  if (env.STAFF_PASS_HASH && (await verifyPassword(password, env.STAFF_PASS_HASH))) {
-    const token = await signToken({ s: 'staff', r: 'staff', e: nowSec() + TTL_ADMIN }, env.SESSION_SECRET);
-    return json({ token, role: 'staff' });
-  }
-  return fail('INVALID_CREDENTIALS', '密码错误', 401);
+  const token = await signToken({ s: 'admin', r: 'admin', e: nowSec() + TTL_ADMIN }, env.SESSION_SECRET);
+  return json({ token });
 }
 
 async function handleAdminPlayers(url, request, env) {
   if (!env.DB) return fail('DB_NOT_BOUND', 'D1 数据库未绑定', 500);
-  const auth = await requireStaff(request, env);
+  const auth = await requireAdmin(request, env);
   if (auth.error) return auth.error;
 
+  await ensureAdminColumn(env);
   const limit = clampLimit(url.searchParams.get('limit'));
   const [list, total] = await Promise.all([
-    env.DB.prepare('SELECT pid, username, nickname, avatar, created_at, updated_at FROM players ORDER BY created_at DESC LIMIT ?').bind(limit).all(),
+    env.DB.prepare('SELECT pid, username, nickname, avatar, is_admin, created_at, updated_at FROM players ORDER BY created_at DESC LIMIT ?').bind(limit).all(),
     env.DB.prepare('SELECT COUNT(*) AS n FROM players').first()
   ]);
   return json({ total: (total && total.n) || 0, limit, players: (list && list.results) || [] });
 }
 
+// 设置 / 取消玩家管理员（仅 MTC 管理员密码登录后可操作）
+async function handleAdminSetAdmin(pid, request, env) {
+  if (!env.DB) return fail('DB_NOT_BOUND', 'D1 数据库未绑定', 500);
+  const auth = await requireAdmin(request, env);
+  if (auth.error) return auth.error;
+  if (!PID_RE.test(pid)) return fail('INVALID_PID', 'pid 格式非法');
+
+  const body = await readJson(request);
+  if (!body || typeof body.admin !== 'boolean') return fail('INVALID_BODY', 'admin 必须为布尔值');
+
+  await ensureAdminColumn(env);
+  const row = await env.DB.prepare('SELECT pid FROM players WHERE pid = ?').bind(pid).first();
+  if (!row) return fail('USER_NOT_FOUND', '该玩家不存在', 404);
+
+  await env.DB.prepare('UPDATE players SET is_admin = ?, updated_at = ? WHERE pid = ?')
+    .bind(body.admin ? 1 : 0, nowSec(), pid).run();
+  return json({ ok: true, pid, is_admin: body.admin ? 1 : 0 });
+}
+
 async function handleAdminDelete(pid, request, env) {
   if (!env.DB) return fail('DB_NOT_BOUND', 'D1 数据库未绑定', 500);
-  const auth = await requireStaff(request, env);
+  const auth = await requireAdmin(request, env);
   if (auth.error) return auth.error;
-  if (auth.role !== 'admin') return fail('FORBIDDEN', '员工账号无权删除玩家', 403);
   if (!pid || !PID_RE.test(pid)) return fail('INVALID_PID', 'pid 格式非法');
 
   await env.DB.batch([
@@ -988,6 +1021,7 @@ async function handleAdminMigrate(request, env) {
   const auth = await requireAdmin(request, env);
   if (auth.error) return auth.error;
 
+  await ensureAdminColumn(env);
   const ddl = [
     `CREATE TABLE IF NOT EXISTS rooms (
       id TEXT PRIMARY KEY, host_pid TEXT NOT NULL, guest_pid TEXT, status TEXT NOT NULL,
@@ -1070,6 +1104,9 @@ export async function onRequest(context) {
 
     const del = /^\/api\/admin\/players\/([^/]+)$/.exec(path);
     if (del && method === 'DELETE') return handleAdminDelete(decodeURIComponent(del[1]), request, env);
+
+    const setAdmin = /^\/api\/admin\/players\/([^/]+)\/admin$/.exec(path);
+    if (setAdmin && method === 'POST') return handleAdminSetAdmin(decodeURIComponent(setAdmin[1]), request, env);
 
     return fail('NOT_FOUND', '接口不存在', 404);
   } catch (e) {

@@ -33,6 +33,10 @@
     .row .name { font-size:14px; font-weight:800; color:#fff; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .row .name .acc { font-size:10px; font-weight:600; color:#8a93b8; margin-left:6px; }
     .row .meta { font-size:10px; color:#7d8ab0; margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .row .acts { display:flex; gap:6px; flex-shrink:0; }
+    .row .acts button { padding:6px 8px; font-size:11px; }
+    .row .role { border-color:rgba(240,192,96,0.55); color:#ffe6a8; background:rgba(240,192,96,0.12); }
+    .badge-admin { display:inline-block; font-size:10px; font-weight:800; color:#ffe6a8; background:rgba(240,192,96,0.16); border:1px solid rgba(240,192,96,0.55); border-radius:999px; padding:2px 6px; margin-left:6px; }
     .live { display:flex; align-items:center; gap:6px; font-size:10px; color:#7d8ab0; margin:-4px 0 8px; }
     .live .dot { width:6px; height:6px; border-radius:50%; background:#3fae5c; box-shadow:0 0 6px #3fae5c; flex:0 0 6px; }
     .empty { padding:28px 12px; text-align:center; color:#7d8ab0; font-size:12px; }
@@ -52,7 +56,7 @@
 <body>
 <div class="card">
     <h1>🛠 MTC 管理后台</h1>
-    <div class="sub">管理员入口 · 与玩家账号完全独立 · v1.2 员工模式</div>
+    <div class="sub">管理员入口 · 与玩家账号完全独立 · v1.3 玩家管理员</div>
 
     <!-- 登录 -->
     <div id="loginView">
@@ -113,27 +117,11 @@
     var supLive = document.getElementById('supLive');
     var tabPlayers = document.getElementById('tabPlayers');
     var tabSupport = document.getElementById('tabSupport');
-    var deleting = false, autoTimer = null, lastSig = '', lastSupSig = '', tabMode = 'players';
+    var deleting = false, roleBusy = false, autoTimer = null, lastSig = '', lastSupSig = '', tabMode = 'players';
 
-    // 角色：admin = 管理员（可删账号）；staff = 员工（只读）。登录接口返回，或从 token 里解出
-    var ROLE_KEY = 'mtcAdminRole';
-    function roleOf(t) {
-        try {
-            var body = String(t).split('.')[0].replace(/-/g, '+').replace(/_/g, '/');
-            var json = JSON.parse(atob(body + '==='.slice((body.length + 3) % 4)));
-            return json && json.r === 'admin' ? 'admin' : 'staff';
-        } catch (e) { return 'staff'; }
-    }
-    var role = 'staff';
-    try { role = sessionStorage.getItem(ROLE_KEY) || (token ? roleOf(token) : 'staff'); } catch (e) { role = token ? roleOf(token) : 'staff'; }
-
-    function saveToken(t, r) {
+    function saveToken(t) {
         token = t || '';
-        if (t) role = r === 'admin' ? 'admin' : 'staff';
-        try {
-            if (token) sessionStorage.setItem(TOKEN_KEY, token); else sessionStorage.removeItem(TOKEN_KEY);
-            if (token) sessionStorage.setItem(ROLE_KEY, role); else sessionStorage.removeItem(ROLE_KEY);
-        } catch (e) {}
+        try { if (token) sessionStorage.setItem(TOKEN_KEY, token); else sessionStorage.removeItem(TOKEN_KEY); } catch (e) {}
     }
 
     function api(path, opts) {
@@ -172,7 +160,7 @@
     // 头像和昵称变化都会反映到签名里，签名没变就不重建 DOM（避免每轮刷新闪烁）
     function sigOf(players) {
         return players.map(function (p) {
-            return p.pid + '|' + (p.nickname || '') + '|' + (p.avatar ? p.avatar.length : 0) + '|' + p.updated_at;
+            return p.pid + '|' + (p.nickname || '') + '|' + (p.avatar ? p.avatar.length : 0) + '|' + (p.is_admin ? 1 : 0) + '|' + p.updated_at;
         }).join(';');
     }
 
@@ -293,7 +281,7 @@
     }
 
     function loadPlayers(silent) {
-        if (deleting) return;
+        if (deleting || roleBusy) return;
         adminErr.textContent = '';
         if (!silent) {
             list.innerHTML = '';
@@ -321,7 +309,7 @@
     }
 
     function renderPlayers(players, total) {
-        count.textContent = (role === 'admin' ? '' : '员工模式 · ') + '共 ' + total + ' 名玩家' + (players.length < total ? '（显示最近 ' + players.length + ' 名）' : '');
+        count.textContent = '共 ' + total + ' 名玩家' + (players.length < total ? '（显示最近 ' + players.length + ' 名）' : '');
         lastSig = sigOf(players);
         list.innerHTML = '';
         if (!players.length) {
@@ -359,6 +347,12 @@
             var name = document.createElement('div');
             name.className = 'name';
             name.textContent = nick;                       // 用 textContent，防止昵称注入 HTML
+            if (p.is_admin) {
+                var adminBadge = document.createElement('span');
+                adminBadge.className = 'badge-admin';
+                adminBadge.textContent = '管理员';
+                name.appendChild(adminBadge);
+            }
             if (p.nickname && p.nickname !== p.username) {
                 var acc = document.createElement('span');
                 acc.className = 'acc';
@@ -372,22 +366,30 @@
             info.appendChild(meta);
             row.appendChild(info);
 
-            // 删除按钮只给管理员，员工账号服务端也会拒绝（403）
-            if (role === 'admin') {
-                var del = document.createElement('button');
-                del.className = 'danger';
-                del.type = 'button';
-                del.textContent = '删除';
-                del.addEventListener('click', function () { removePlayer(p); });
-                row.appendChild(del);
-            }
+            var acts = document.createElement('div');
+            acts.className = 'acts';
+
+            var roleBtn = document.createElement('button');
+            roleBtn.className = 'role';
+            roleBtn.type = 'button';
+            roleBtn.textContent = p.is_admin ? '取消管理员' : '设为管理员';
+            roleBtn.addEventListener('click', function () { toggleAdmin(p); });
+            acts.appendChild(roleBtn);
+
+            var del = document.createElement('button');
+            del.className = 'danger';
+            del.type = 'button';
+            del.textContent = '删除';
+            del.addEventListener('click', function () { removePlayer(p); });
+            acts.appendChild(del);
+
+            row.appendChild(acts);
 
             list.appendChild(row);
         });
     }
 
     function removePlayer(p) {
-        if (role !== 'admin') return;
         var label = p.nickname || p.username;
         if (!confirm('确定删除玩家「' + label + '」（@' + p.username + '）？\n删除后该账号无法再登录，数据不可恢复。')) return;
         deleting = true;
@@ -403,13 +405,33 @@
         });
     }
 
+    function toggleAdmin(p) {
+        var next = !p.is_admin;
+        var label = p.nickname || p.username;
+        var tip = next
+            ? '确定把「' + label + '」设为管理员？\n管理员可直接下架市场皮肤、免同意加好友。'
+            : '确定取消「' + label + '」的管理员权限？';
+        if (!confirm(tip)) return;
+        roleBusy = true;
+        adminErr.textContent = next ? '正在设为管理员…' : '正在取消管理员…';
+        api('/admin/players/' + encodeURIComponent(p.pid) + '/admin', { method: 'POST', body: { admin: next } }).then(function () {
+            roleBusy = false;
+            adminErr.textContent = '';
+            loadPlayers(false);
+        }).catch(function (e) {
+            roleBusy = false;
+            adminErr.textContent = e.message;
+            if (e.status === 401) showLogin('登录已失效，请重新输入管理员密码');
+        });
+    }
+
     btnLogin.addEventListener('click', function () {
         var password = pwd.value;
         if (!password) { loginErr.textContent = '请输入管理员密码'; return; }
         btnLogin.disabled = true;
         loginErr.textContent = '';
         api('/admin/login', { method: 'POST', body: { password: password } }).then(function (data) {
-            saveToken(data.token, data.role);
+            saveToken(data.token);
             btnLogin.disabled = false;
             showAdmin();
         }).catch(function (e) {

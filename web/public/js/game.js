@@ -3131,7 +3131,11 @@
         }
         function skinMarketRefresh(){
             skinBuildFilters();
-            if(skinMarketTab==='mine') renderMine(); else skinMarketLoad();
+            if(skinMarketTab==='mine'){ renderMine(); return; }
+            // 进入市场时刷新一次账号信息，后台刚授予/取消管理员后无需重新登录即可生效
+            if(!authToken){ skinMarketLoad(); return; }
+            authApi('/auth/me').then(d=>{ if(d&&d.user){ authUser=d.user; authRender(); } })
+                .catch(()=>{}).then(skinMarketLoad);
         }
         async function skinMarketLoad(){
             if(skinMarketTab!=='market') return;
@@ -3173,11 +3177,13 @@
                 const local=!!skinFind(s.id);
                 const eq=skinEquipMap[s.role]===s.id;
                 const mine=!!(authUser&&s.author_pid===authUser.pid);
+                const admin=!!(authUser&&authUser.is_admin);
                 let acts='';
                 if(eq) acts+='<button class="btn btn-sm" data-act="unequip">取消装备</button>';
                 else if(local) acts+='<button class="btn btn-sm btn-success" data-act="equip">装备</button>';
                 else acts+='<button class="btn btn-sm btn-success" data-act="download">下载并装备</button>';
-                if(mine) acts+='<button class="btn btn-sm btn-danger" data-act="unpub">下架</button>';
+                // 作者本人可下架自己的皮肤；管理员可强制下架任何人发布的皮肤
+                if(mine||admin) acts+='<button class="btn btn-sm btn-danger" data-act="unpub">'+(mine?'下架':'强制下架')+'</button>';
                 return '<div class="skin-card" data-id="'+skinEsc(s.id)+'">'
                     +'<div class="skin-card-thumb">'+(s.thumb?'<img src="'+s.thumb+'" alt="">':'')+'</div>'
                     +'<div class="skin-card-title">'+skinEsc(s.name)+'</div>'
@@ -3636,6 +3642,7 @@
             const main=document.createElement('div'); main.className='fr-main';
             const nm=document.createElement('div'); nm.className='fr-name';
             const nt=document.createElement('span'); nt.className='fr-name-text'; nt.textContent=displayName(item); nm.appendChild(nt);
+            if(item&&item.is_admin){ const ad=document.createElement('span'); ad.className='fr-admin'; ad.textContent='管理员'; nm.appendChild(ad); }
             if(presence){
                 const st=document.createElement('span');
                 st.className='fr-status'+(presence.online?' is-online':'');

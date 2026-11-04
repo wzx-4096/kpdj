@@ -536,6 +536,7 @@
 .fr-name-text { color:#fff; font-size:13px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .fr-status { flex-shrink:0; font-size:10px; font-weight:700; line-height:1; padding:3px 7px; border-radius:999px; color:#8a93b8; background:rgba(138,147,184,0.14); border:1px solid rgba(138,147,184,0.26); }
 .fr-status.is-online { color:#63e89a; background:rgba(61,220,132,0.14); border-color:rgba(61,220,132,0.45); }
+.fr-admin { flex-shrink:0; font-size:10px; font-weight:800; line-height:1; padding:3px 7px; border-radius:999px; color:#ffe6a8; background:rgba(240,192,96,0.16); border:1px solid rgba(240,192,96,0.55); }
 .fr-subline { color:#667; font-size:10px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .fr-actions { display:flex; gap:6px; flex-shrink:0; }
 .fr-btn { border:1px solid var(--border); background:#1b1c30; color:#ccd; font-size:11px; padding:5px 9px; border-radius:8px; cursor:pointer; }

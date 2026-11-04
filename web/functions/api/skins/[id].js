@@ -1,6 +1,6 @@
-// ============ 角色皮肤市场：GET 详情（下载计数）/ DELETE 作者下架 ============
+// ============ 角色皮肤市场：GET 详情（下载计数）/ DELETE 作者或管理员下架 ============
 // GET    /api/skins/:id
-// DELETE /api/skins/:id（Bearer 玩家 token，仅作者本人）
+// DELETE /api/skins/:id（Bearer 玩家 token，仅作者本人或管理员玩家）
 // 环境变量/绑定：DB（D1）、SESSION_SECRET
 
 const ID_RE = /^sk_[A-Za-z0-9]{6,32}$/;
@@ -50,12 +50,21 @@ function bearer(request) {
   const m = /^Bearer\s+(.+)$/i.exec(h);
   return m ? m[1] : '';
 }
+let adminColReady = false;
+async function ensureAdminColumn(env) {
+  if (adminColReady) return;
+  try {
+    await env.DB.prepare('ALTER TABLE players ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0').run();
+  } catch (e) { /* 列已存在 */ }
+  adminColReady = true;
+}
 async function requirePlayer(request, env) {
   if (!env.DB) return { error: fail('DB_NOT_BOUND', 'D1 数据库未绑定', 500) };
   if (!env.SESSION_SECRET) return { error: fail('NO_SESSION_SECRET', '服务端未配置 SESSION_SECRET', 500) };
   const payload = await verifyToken(bearer(request), env.SESSION_SECRET);
   if (!payload || payload.r !== 'player') return { error: fail('UNAUTHORIZED', '登录状态已失效，请重新登录', 401) };
-  const row = await env.DB.prepare('SELECT pid, username, nickname, avatar FROM players WHERE pid = ?').bind(payload.s).first();
+  await ensureAdminColumn(env);
+  const row = await env.DB.prepare('SELECT pid, username, nickname, avatar, is_admin FROM players WHERE pid = ?').bind(payload.s).first();
   if (!row) return { error: fail('UNAUTHORIZED', '账号不存在或已被删除', 401) };
   return { user: row };
 }
@@ -121,7 +130,7 @@ export async function onRequestDelete(context) {
     if (!ID_RE.test(id)) return fail('INVALID_ID', '皮肤不存在');
     const row = await env.DB.prepare('SELECT author_pid FROM skins WHERE id = ?').bind(id).first();
     if (!row) return fail('NOT_FOUND', '皮肤不存在或已下架', 404);
-    if (row.author_pid !== auth.user.pid) return fail('FORBIDDEN', '只能下架自己发布的皮肤', 403);
+    if (row.author_pid !== auth.user.pid && !auth.user.is_admin) return fail('FORBIDDEN', '只能下架自己发布的皮肤', 403);
     await env.DB.prepare('DELETE FROM skins WHERE id = ?').bind(id).run();
     return json({ ok: true });
   } catch (e) {
